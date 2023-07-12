@@ -28,10 +28,12 @@ workspace "Stromboli"
             "-Werror",
             "-Wno-unused-variable",
         	"-Wno-unused-function",
+            "-Wno-unused-but-set-variable",
         }
         defines
         {
             "_GNU_SOURCE",
+            "GROUNDED_VULKAN_SUPPORT",
         }
     
     filter "system:window"

@@ -26,6 +26,9 @@ int main(int argc, char** argv) {
     StromboliResult error = initStromboli(&context, &(StromboliInitializationParameters) {
         .applicationName = applicationName,
         .applicationMajorVersion = 1,
+        .platformGetRequiredNativeInstanceExtensions = groundedWindowGetVulkanInstanceExtensions,
+        .enableValidation = true,
+        .enableSynchronizationValidation = true,
     });
     if(STROMBOLI_ERROR(error)) {
         ASSERT(false);
@@ -45,6 +48,8 @@ int main(int argc, char** argv) {
 
         // Do your per-frame work here
     }
+
+    shutdownStromboli(&context);
 
     // Release resources
     groundedDestroyWindow(window);
