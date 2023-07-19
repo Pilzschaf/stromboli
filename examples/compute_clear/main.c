@@ -4,6 +4,16 @@
 
 #include <stromboli/stromboli.h>
 
+// Next time: Compute Pipeline
+// After that: Utils and first compute frame?
+
+StromboliSwapchain swapchain;
+
+void resizeApplication(StromboliContext* context, u32 width, u32 height) {
+    vkDeviceWaitIdle(context->device);
+    stromboliSwapchainResize(context, &swapchain, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, width, height);
+}
+
 int main(int argc, char** argv) {
     { // Thread context initialization
         MemoryArena arena1 = createGrowingArena(osGetMemorySubsystem(), KB(256));
@@ -34,6 +44,8 @@ int main(int argc, char** argv) {
         ASSERT(false);
     }
 
+    swapchain = stromboliSwapchainCreate(&context, groundedWindowGetVulkanSurface(window, context.instance), VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, groundedGetWindowWidth(window), groundedGetWindowHeight(window));
+
     // Message loop
     u32 eventCount = 0;
     bool running = true;
@@ -44,11 +56,18 @@ int main(int argc, char** argv) {
                 running = false;
                 break;
             }
+            if(events[i].type == GROUNDED_EVENT_TYPE_RESIZE) {
+                stromboliSwapchainResize(&context, &swapchain, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, events[i].resize.width, events[i].resize.height);
+            }
         }
 
         // Do your per-frame work here
     }
 
+    vkDeviceWaitIdle(context.device);
+
+    stromboliSwapchainDestroy(&context, &swapchain);
+    vkDestroySurfaceKHR(context.instance, swapchain.surface, 0);
     shutdownStromboli(&context);
 
     // Release resources

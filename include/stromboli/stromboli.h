@@ -13,6 +13,10 @@
 #define MAX_QUEUE_COUNT 8
 #endif
 
+#ifndef MAX_SWAPCHAIN_IMAGES
+#define MAX_SWAPCHAIN_IMAGES 8
+#endif
+
 #define STROMBOLI_QUEUE_FLAG_SUPPORTS_PRESENT      0x01
 typedef struct StromboliQueue {
 	VkQueue queue;
@@ -56,6 +60,18 @@ typedef struct StromboliResult {
     int error;
     String8 errorString;
 } StromboliResult;
+
+typedef struct StromboliSwapchain {
+    VkSwapchainKHR swapchain;
+    VkSurfaceKHR surface;
+    u32 width;
+    u32 height;
+    VkFormat format;
+    u32 numImages;
+
+    VkImage images[MAX_SWAPCHAIN_IMAGES];
+    VkImageView imageViews[MAX_SWAPCHAIN_IMAGES];
+} StromboliSwapchain;
 
 typedef struct StromboliInitializationParameters {
     u32 additionalInstanceExtensionCount;
@@ -108,5 +124,10 @@ typedef struct StromboliInitializationParameters {
 
 StromboliResult initStromboli(StromboliContext* context, StromboliInitializationParameters* parameters);
 void shutdownStromboli(StromboliContext* context);
+
+StromboliSwapchain stromboliSwapchainCreate(StromboliContext* context, VkSurfaceKHR surface, VkImageUsageFlags usage, u32 width, u32 height);
+// Resizing of swapchain recreates images, image views etc. stored in the swapchain. Swapchain should not be in use anymore
+bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height);
+void stromboliSwapchainDestroy(StromboliContext* context, StromboliSwapchain* swapchain);
 
 #endif // STROMBOLI_H

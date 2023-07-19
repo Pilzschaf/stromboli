@@ -69,6 +69,7 @@ project "StromboliStatic"
     files
     {
         "src/stromboli_device.c",
+        "src/stromboli_swapchain.c",
     }
     links
     {
@@ -81,6 +82,7 @@ project "StromboliDynamic"
     files
     {
         "src/stromboli_device.c",
+        "src/stromboli_swapchain.c",
     }
     links
     {
