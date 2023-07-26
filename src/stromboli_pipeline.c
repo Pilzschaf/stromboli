@@ -1,0 +1,225 @@
+#include <stromboli/stromboli.h>
+#include <grounded/memory/grounded_arena.h>
+#include <grounded/file/grounded_file.h>
+
+#include <spirv_reflect.h>
+
+struct ShaderDescriptorSetInfo {
+    VkDescriptorType descriptorTypes[32];
+    u32 descriptorCounts[32];
+    VkShaderStageFlagBits stages[32];
+    u32 descriptorMask;
+    //VkDescriptorBindingFlags flags[32];
+};
+
+typedef struct ShaderInfo {
+    VkShaderStageFlagBits stage;
+    VkPushConstantRange range;
+    struct ShaderDescriptorSetInfo descriptorSets[4];
+
+    // Options that are only filled out depending on shader type
+    u32 computeWorkgroupWidth;
+    u32 computeWorkgroupHeight;
+    u32 computeWorkgroupDepth;
+} ShaderInfo;
+
+// Only returns true if it is a real substring eg. length(s) > length(searchPattern)
+static inline bool startsWith(const char* s, const char* searchPattern) {
+    while(*s != '\0') {
+        if(*searchPattern == '\0') return true;
+        if(*s != *searchPattern) {
+            return false;
+        }
+        ++s;
+        ++searchPattern;
+    }
+    return false;
+}
+
+static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena* arena, String8 filename, ShaderInfo* shaderInfo) {
+    u64 dataSize = 0;
+    u8* data = groundedReadFileImmutable(filename, &dataSize);
+    ASSERT((dataSize % 4) == 0);
+
+    VkShaderModule result;
+    {
+        VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        createInfo.codeSize = dataSize;
+        createInfo.pCode = (u32*)data;
+        vkCreateShaderModule(context->device, &createInfo, 0, &result);
+    }
+
+    SpvReflectShaderModule reflectModule;
+    SpvReflectResult error = spvReflectCreateShaderModule(dataSize, data, &reflectModule);
+    ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
+
+    groundedFreeFileImmutable(data, dataSize);
+    data = 0;
+    dataSize = 0;
+
+    shaderInfo->stage = (VkShaderStageFlagBits)reflectModule.shader_stage;
+    if(shaderInfo->stage == VK_SHADER_STAGE_COMPUTE_BIT) {
+        const SpvReflectEntryPoint* entryPoint = spvReflectGetEntryPoint(&reflectModule, "main");
+        if(entryPoint) {
+            shaderInfo->computeWorkgroupWidth = entryPoint->local_size.x;
+            shaderInfo->computeWorkgroupHeight = entryPoint->local_size.y;
+            shaderInfo->computeWorkgroupDepth = entryPoint->local_size.z;
+        }
+    }
+
+    { // Descriptor Sets
+        u32 descriptorSetCount = 0;
+        error = spvReflectEnumerateDescriptorSets(&reflectModule, &descriptorSetCount, 0);
+        ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
+        SpvReflectDescriptorSet** descriptorSets = ARENA_PUSH_ARRAY_NO_CLEAR(arena, descriptorSetCount, SpvReflectDescriptorSet*);
+        error = spvReflectEnumerateDescriptorSets(&reflectModule, &descriptorSetCount, descriptorSets);
+        ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
+
+        ASSERT(descriptorSetCount <= 4);
+        for(u32 j = 0; j < descriptorSetCount; ++j) {
+            for(u32 i = 0; i < descriptorSets[j]->binding_count; ++i) {
+                SpvReflectDescriptorBinding* binding = descriptorSets[j]->bindings[i];
+                u32 setIndex = descriptorSets[j]->set;
+            
+                // Larger binding numbers are not supported here
+                ASSERT(binding->binding < 32);
+                ASSERT(shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] == 0 || shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] == (VkDescriptorType)binding->descriptor_type);
+                shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] = (VkDescriptorType)binding->descriptor_type;
+                shaderInfo->descriptorSets[setIndex].descriptorCounts[binding->binding] = binding->count;
+                ASSERT(binding->count > 0);
+
+                // Binding name is the instance name and not the type name!
+                if(startsWith(binding->name, "dynamic")) {
+                    if(shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
+                        shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+                    } else {
+                        GROUNDED_LOG_WARNING("'dynamic' instance name for non uniform block.");
+                    }
+                }
+
+                shaderInfo->descriptorSets[setIndex].stages[binding->binding] = shaderInfo->stage;
+                shaderInfo->descriptorSets[setIndex].descriptorMask |= 1 << binding->binding;
+            }
+        }
+    }
+
+    { // Push constants
+        u32 numPushConstantBlocks = 0;
+        error = spvReflectEnumeratePushConstantBlocks(&reflectModule, &numPushConstantBlocks, 0);
+        ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
+        SpvReflectBlockVariable* pushConstantBlocks = ARENA_PUSH_ARRAY_NO_CLEAR(arena, numPushConstantBlocks, SpvReflectBlockVariable);
+        error = spvReflectEnumeratePushConstantBlocks(&reflectModule, &numPushConstantBlocks, &pushConstantBlocks);
+        ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
+        for(u32 i = 0; i < numPushConstantBlocks; ++i) {
+            u32 size = pushConstantBlocks[i].offset + pushConstantBlocks[i].size;
+            shaderInfo->range.size = MAX(size, shaderInfo->range.size);
+            shaderInfo->range.stageFlags |= shaderInfo->stage;
+        }
+    }
+
+    spvReflectDestroyShaderModule(&reflectModule);
+    STROMBOLI_NAME_OBJECT_EXPLICIT(context, result, VK_OBJECT_TYPE_SHADER_MODULE, str8GetCstr(arena, filename));
+
+    return result;
+}
+
+static VkDescriptorSetLayout createSetLayout(StromboliContext* context, struct ShaderDescriptorSetInfo* shaderDescriptorInfo) {
+    u32 currentBindingIndex = 0;
+    VkDescriptorSetLayoutBinding bindings[32]; // 32 is worst case actually because of our 32 binding limitation from above
+
+    for(u32 i = 0; i < 32; ++i) {
+        if(shaderDescriptorInfo->descriptorMask & ((u32)1 << i)) {
+            VkDescriptorSetLayoutBinding* binding = bindings + currentBindingIndex;
+            *binding = (VkDescriptorSetLayoutBinding){0};
+            binding->binding = i;
+            binding->descriptorType = shaderDescriptorInfo->descriptorTypes[i];
+            binding->descriptorCount = shaderDescriptorInfo->descriptorCounts[i];
+            binding->stageFlags = shaderDescriptorInfo->stages[i];
+            ++currentBindingIndex;
+        }
+    }
+
+    VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    createInfo.flags = 0; // VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR
+    createInfo.bindingCount = currentBindingIndex;
+    createInfo.pBindings = bindings;
+
+    VkDescriptorSetLayout result = 0;
+    vkCreateDescriptorSetLayout(context->device, &createInfo, 0, &result);
+
+    return result;
+}
+
+static VkPipelineLayout createPipelineLayout(StromboliContext* context, ShaderInfo* shaderInfo, VkDescriptorSetLayout* descriptorLayouts) {
+    VkPipelineLayout result = 0;
+
+    for(u32 i = 0; i < 4; ++i) {
+        if(shaderInfo->descriptorSets[i].descriptorMask) {
+            descriptorLayouts[i] = createSetLayout(context, &shaderInfo->descriptorSets[i]);
+        } else {
+            // We have to create a stub descriptor set layout
+            VkDescriptorSetLayout layout;
+            VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+            vkCreateDescriptorSetLayout(context->device, &createInfo, 0, &layout);
+            descriptorLayouts[i] = layout;
+        }
+    }
+
+    VkPipelineLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    createInfo.setLayoutCount = 4;
+    createInfo.pSetLayouts = descriptorLayouts;
+    createInfo.pushConstantRangeCount = shaderInfo->range.size > 0 ? 1 : 0;
+    createInfo.pPushConstantRanges = &shaderInfo->range;
+    vkCreatePipelineLayout(context->device, &createInfo, 0, &result);
+    
+    return result;
+}
+
+StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, String8 filename) {
+    MemoryArena* scratch = threadContextGetScratch(0);
+    ArenaTempMemory temp = arenaBeginTemp(scratch);
+
+    ShaderInfo shaderInfo = {0};
+    VkShaderModule shaderModule = createShaderModule(context, scratch, filename, &shaderInfo);
+
+    VkPipelineShaderStageCreateInfo shaderStage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+    shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    shaderStage.module = shaderModule;
+    shaderStage.pName = "main";
+    shaderStage.pSpecializationInfo = 0;
+
+    VkDescriptorSetLayout descriptorLayouts[4] = {0};
+    VkPipelineLayout pipelineLayout = createPipelineLayout(context, &shaderInfo, descriptorLayouts);
+
+    VkPipeline pipeline;
+    {
+        VkComputePipelineCreateInfo createInfo = {VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+        createInfo.stage = shaderStage;
+        createInfo.layout = pipelineLayout;
+        vkCreateComputePipelines(context->device, 0, 1, &createInfo, 0, &pipeline);
+    }
+    // Shader module can be destroyed after pipeline creation
+    vkDestroyShaderModule(context->device, shaderModule, 0);
+
+    StromboliPipeline result = {0};
+    result.type = STROMBOLI_PIPELINE_TYPE_COMPUTE,
+    result.pipeline = pipeline,
+    result.layout = pipelineLayout;
+    for(u32 i = 0; i < 4; ++i) {
+        result.descriptorLayouts[i] = descriptorLayouts[i];
+    }
+    result.compute.workgroupWidth = shaderInfo.computeWorkgroupWidth;
+    result.compute.workgroupHeight = shaderInfo.computeWorkgroupHeight;
+    result.compute.workgroupDepth = shaderInfo.computeWorkgroupDepth;
+    
+    arenaEndTemp(temp);
+    return result;
+}
+
+void stromboliPipelineDestroy(StromboliContext* context, StromboliPipeline* pipeline) {
+    for(u32 i = 0; i < ARRAY_COUNT(pipeline->descriptorLayouts); ++i) {
+        vkDestroyDescriptorSetLayout(context->device, pipeline->descriptorLayouts[i], 0);
+    }
+    vkDestroyPipelineLayout(context->device, pipeline->layout, 0);
+    vkDestroyPipeline(context->device, pipeline->pipeline, 0);
+}

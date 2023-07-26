@@ -73,6 +73,25 @@ typedef struct StromboliSwapchain {
     VkImageView imageViews[MAX_SWAPCHAIN_IMAGES];
 } StromboliSwapchain;
 
+enum StromboliPipelineType {
+    STROMBOLI_PIPELINE_TYPE_COMPUTE,
+    STROMBOLI_PIPELINE_TYPE_COUNT,
+};
+
+typedef struct StromboliPipeline {
+    VkPipeline pipeline;
+    VkPipelineLayout layout;
+
+    VkDescriptorSetLayout descriptorLayouts[4];
+
+    enum StromboliPipelineType type;
+    union {
+        u32 workgroupWidth;
+        u32 workgroupHeight;
+        u32 workgroupDepth;
+    } compute;
+} StromboliPipeline;
+
 typedef struct StromboliInitializationParameters {
     u32 additionalInstanceExtensionCount;
     u32 additionalDeviceExtensionCount;
@@ -129,5 +148,21 @@ StromboliSwapchain stromboliSwapchainCreate(StromboliContext* context, VkSurface
 // Resizing of swapchain recreates images, image views etc. stored in the swapchain. Swapchain should not be in use anymore
 bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height);
 void stromboliSwapchainDestroy(StromboliContext* context, StromboliSwapchain* swapchain);
+
+StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, String8 filename);
+void stromboliPipelineDestroy(StromboliContext* context, StromboliPipeline* pipeline);
+
+#define STROMBOLI_NAME_OBJECT_EXPLICIT(context, object, type, name) stromboliNameObject(context, INT_FROM_PTR(object), type, name)
+#define STROMBOLI_NAME_OBJECT(context, object, type) STROMBOLI_NAME_OBJECT_EXPLICIT(context, object, type, #object)
+static inline void stromboliNameObject(StromboliContext* context, u64 handle, VkObjectType type, const char* name) {
+	if (vkSetDebugUtilsObjectNameEXT) {
+		VkDebugUtilsObjectNameInfoEXT nameInfo = { 0 };
+		nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		nameInfo.objectType = type;
+		nameInfo.objectHandle = handle;
+		nameInfo.pObjectName = name;
+		vkSetDebugUtilsObjectNameEXT(context->device, &nameInfo);
+	}
+}
 
 #endif // STROMBOLI_H

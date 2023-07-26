@@ -19,6 +19,7 @@ workspace "Stromboli"
         "libs/grounded/include",
         "include",
         "libs",
+        "libs/SPIRV-Reflect",
     }
 
     filter "system:linux"
@@ -70,6 +71,8 @@ project "StromboliStatic"
     {
         "src/stromboli_device.c",
         "src/stromboli_swapchain.c",
+        "src/stromboli_pipeline.c",
+        "libs/SPIRV-Reflect/spirv_reflect.c",
     }
     links
     {

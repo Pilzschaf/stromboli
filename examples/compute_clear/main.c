@@ -4,8 +4,7 @@
 
 #include <stromboli/stromboli.h>
 
-// Next time: Compute Pipeline
-// After that: Utils and first compute frame?
+// Next time: Utils and first compute frame?
 
 StromboliSwapchain swapchain;
 
@@ -46,6 +45,8 @@ int main(int argc, char** argv) {
 
     swapchain = stromboliSwapchainCreate(&context, groundedWindowGetVulkanSurface(window, context.instance), VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, groundedGetWindowWidth(window), groundedGetWindowHeight(window));
 
+    StromboliPipeline computePipeline = stromboliPipelineCreateCompute(&context, STR8_LITERAL("examples/compute_clear/clear.comp.spv"));
+
     // Message loop
     u32 eventCount = 0;
     bool running = true;
@@ -66,6 +67,7 @@ int main(int argc, char** argv) {
 
     vkDeviceWaitIdle(context.device);
 
+    stromboliPipelineDestroy(&context, &computePipeline);
     stromboliSwapchainDestroy(&context, &swapchain);
     vkDestroySurfaceKHR(context.instance, swapchain.surface, 0);
     shutdownStromboli(&context);
