@@ -71,18 +71,9 @@ void renderFrame(StromboliContext* context) {
     VkCommandBufferBeginInfo beginInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    VkDescriptorImageInfo imageInfo = {
-        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .imageView = swapchain.imageViews[imageIndex],
-    };
-    VkWriteDescriptorSet descriptorWrite = {
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-        .dstSet = descriptorSet,
-        .pImageInfo = &imageInfo,
-    };
-    vkUpdateDescriptorSets(context->device, 1, &descriptorWrite, 0, 0);
+    StromboliDescriptorInfo set0[1];
+    set0[0] = stromboliCreateImageDescriptor(VK_IMAGE_LAYOUT_GENERAL, swapchain.imageViews[imageIndex], 0);
+    vkUpdateDescriptorSetWithTemplateKHR(context->device, descriptorSet, computePipeline.updateTemplates[0], set0);
 
     vkBeginCommandBuffer(commandBuffer, &beginInfo);
         { // Swapchain image Undefined -> General
@@ -161,6 +152,8 @@ int main(int argc, char** argv) {
         .enableValidation = true,
         .enableSynchronizationValidation = true,
         .computeQueueRequestCount = 1,
+        .descriptorUpdateTemplate = true, //TODO: How can we use either the KHR or non KHR version of the functions? Currently only one of them is loaded depending on vulkan version
+        //.vulkanApiVersion = VK_API_VERSION_1_1,
     });
     if(STROMBOLI_ERROR(error)) {
         ASSERT(false);

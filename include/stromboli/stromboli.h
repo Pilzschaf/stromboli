@@ -83,6 +83,7 @@ typedef struct StromboliPipeline {
     VkPipelineLayout layout;
 
     VkDescriptorSetLayout descriptorLayouts[4];
+    VkDescriptorUpdateTemplate updateTemplates[4];
 
     enum StromboliPipelineType type;
     union {
@@ -91,6 +92,13 @@ typedef struct StromboliPipeline {
         u32 workgroupDepth;
     } compute;
 } StromboliPipeline;
+
+typedef struct StromboliDescriptorInfo {
+    union {
+        VkDescriptorBufferInfo bufferInfo;
+        VkDescriptorImageInfo imageInfo;
+    };
+} StromboliDescriptorInfo;
 
 typedef struct StromboliInitializationParameters {
     u32 additionalInstanceExtensionCount;
@@ -119,6 +127,7 @@ typedef struct StromboliInitializationParameters {
     bool enableApiDump;
 
     // Features
+    bool descriptorUpdateTemplate;
     bool disableSwapchain;
     bool calibratedTimestamps;
     bool sampleRateShadingFeature;
@@ -163,6 +172,26 @@ static inline void stromboliNameObject(StromboliContext* context, u64 handle, Vk
 		nameInfo.pObjectName = name;
 		vkSetDebugUtilsObjectNameEXT(context->device, &nameInfo);
 	}
+}
+
+static inline StromboliDescriptorInfo stromboliCreateBufferDescriptor(VkBuffer buffer, VkDeviceSize offset, VkDeviceSize range) {
+	StromboliDescriptorInfo result;
+
+	result.bufferInfo.buffer = buffer;
+	result.bufferInfo.offset = offset;
+	result.bufferInfo.range = range;
+
+	return result;
+}
+
+static inline StromboliDescriptorInfo stromboliCreateImageDescriptor(VkImageLayout imageLayout, VkImageView imageView, VkSampler sampler) {
+	StromboliDescriptorInfo result;
+
+	result.imageInfo.imageLayout = imageLayout;
+	result.imageInfo.imageView = imageView;
+	result.imageInfo.sampler = sampler;
+
+	return result;
 }
 
 #endif // STROMBOLI_H

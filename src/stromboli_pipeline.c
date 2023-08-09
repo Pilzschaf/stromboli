@@ -150,12 +150,47 @@ static VkDescriptorSetLayout createSetLayout(StromboliContext* context, struct S
     return result;
 }
 
-static VkPipelineLayout createPipelineLayout(StromboliContext* context, ShaderInfo* shaderInfo, VkDescriptorSetLayout* descriptorLayouts) {
+static VkDescriptorUpdateTemplate createDescriptorUpdateTemplate(StromboliContext* context, struct ShaderDescriptorSetInfo* shaderDescriptorInfo, VkDescriptorSetLayout layout, u32 setIndex, VkPipelineBindPoint bindPoint) {
+    u32 currentEntryIndex = 0;
+    u32 currentOffset = 0;
+    VkDescriptorUpdateTemplateEntry updateTemplateEntries[32];
+
+    for(u32 i = 0; i < 32; ++i) {
+        if(shaderDescriptorInfo->descriptorMask & ((u32)1 << i)) {
+            VkDescriptorUpdateTemplateEntry* templateEntry = updateTemplateEntries + currentEntryIndex;
+            templateEntry->dstBinding = i;
+            templateEntry->dstArrayElement = 0;
+            templateEntry->descriptorCount = shaderDescriptorInfo->descriptorCounts[i];
+            templateEntry->descriptorType = shaderDescriptorInfo->descriptorTypes[i];
+            templateEntry->offset = sizeof(struct StromboliDescriptorInfo)*currentOffset; //TODO: Maybe set the offset based on i not currentEntryIndex?
+            templateEntry->stride = sizeof(struct StromboliDescriptorInfo);
+
+            ++currentEntryIndex;
+            currentOffset += shaderDescriptorInfo->descriptorCounts[i];
+        }
+    }
+
+    VkDescriptorUpdateTemplateCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_UPDATE_TEMPLATE_CREATE_INFO};
+    createInfo.descriptorUpdateEntryCount = currentEntryIndex;
+    createInfo.pDescriptorUpdateEntries = updateTemplateEntries;
+    createInfo.templateType = VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_DESCRIPTOR_SET;
+    createInfo.descriptorSetLayout = layout;
+    createInfo.set = setIndex;
+    createInfo.pipelineBindPoint = bindPoint;
+    
+    VkDescriptorUpdateTemplate result;
+    vkCreateDescriptorUpdateTemplateKHR(context->device, &createInfo, 0, &result);
+    
+    return result;
+}
+
+static VkPipelineLayout createPipelineLayout(StromboliContext* context, ShaderInfo* shaderInfo, VkDescriptorSetLayout* descriptorLayouts, VkDescriptorUpdateTemplate* descriptorUpdateTemplates, VkPipelineBindPoint bindPoint) {
     VkPipelineLayout result = 0;
 
     for(u32 i = 0; i < 4; ++i) {
         if(shaderInfo->descriptorSets[i].descriptorMask) {
             descriptorLayouts[i] = createSetLayout(context, &shaderInfo->descriptorSets[i]);
+            descriptorUpdateTemplates[i] = createDescriptorUpdateTemplate(context, &shaderInfo->descriptorSets[i], descriptorLayouts[i], i, bindPoint);
         } else {
             // We have to create a stub descriptor set layout
             VkDescriptorSetLayout layout;
@@ -189,7 +224,8 @@ StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, Stri
     shaderStage.pSpecializationInfo = 0;
 
     VkDescriptorSetLayout descriptorLayouts[4] = {0};
-    VkPipelineLayout pipelineLayout = createPipelineLayout(context, &shaderInfo, descriptorLayouts);
+    VkDescriptorUpdateTemplate descriptorUpdateTemplates[4] = {0};
+    VkPipelineLayout pipelineLayout = createPipelineLayout(context, &shaderInfo, descriptorLayouts, descriptorUpdateTemplates, VK_PIPELINE_BIND_POINT_COMPUTE);
 
     VkPipeline pipeline;
     {
@@ -207,6 +243,7 @@ StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, Stri
     result.layout = pipelineLayout;
     for(u32 i = 0; i < 4; ++i) {
         result.descriptorLayouts[i] = descriptorLayouts[i];
+        result.updateTemplates[i] = descriptorUpdateTemplates[i];
     }
     result.compute.workgroupWidth = shaderInfo.computeWorkgroupWidth;
     result.compute.workgroupHeight = shaderInfo.computeWorkgroupHeight;
@@ -219,6 +256,9 @@ StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, Stri
 void stromboliPipelineDestroy(StromboliContext* context, StromboliPipeline* pipeline) {
     for(u32 i = 0; i < ARRAY_COUNT(pipeline->descriptorLayouts); ++i) {
         vkDestroyDescriptorSetLayout(context->device, pipeline->descriptorLayouts[i], 0);
+        if(pipeline->updateTemplates[i]) {
+            vkDestroyDescriptorUpdateTemplateKHR(context->device, pipeline->updateTemplates[i], 0);
+        }
     }
     vkDestroyPipelineLayout(context->device, pipeline->layout, 0);
     vkDestroyPipeline(context->device, pipeline->pipeline, 0);

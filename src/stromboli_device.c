@@ -264,6 +264,9 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
     if(parameters->nonUniformIndexingSampledImageArray && context->apiVersion < VK_API_VERSION_1_2) {
         requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME;
     }
+    if(parameters->descriptorUpdateTemplate && context->apiVersion < VK_API_VERSION_1_1) {
+        requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_DESCRIPTOR_UPDATE_TEMPLATE_EXTENSION_NAME;
+    }
 
     // Select physical device
     u32 numDevices = 0;
