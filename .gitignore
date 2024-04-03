@@ -58,3 +58,10 @@ build/
 *.make
 Makefile
 .vscode
+.vs/
+
+# Visual Studio project files
+*.sln
+*.vcxproj
+*.vcxproj.user
+*.vcxproj.filters

@@ -20,6 +20,11 @@ workspace "Stromboli"
         "include",
         "libs",
         "libs/SPIRV-Reflect",
+        "libs/Vulkan-Headers/include",
+    }
+    defines
+    {
+        "GROUNDED_VULKAN_SUPPORT",
     }
 
     filter "system:linux"
@@ -34,7 +39,6 @@ workspace "Stromboli"
         defines
         {
             "_GNU_SOURCE",
-            "GROUNDED_VULKAN_SUPPORT",
         }
     
     filter "system:window"

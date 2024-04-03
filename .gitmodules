@@ -9,3 +9,6 @@
 [submodule "libs/SPIRV-Reflect"]
 	path = libs/SPIRV-Reflect
 	url = https://github.com/KhronosGroup/SPIRV-Reflect.git
+[submodule "libs/Vulkan-Headers"]
+	path = libs/Vulkan-Headers
+	url = https://github.com/KhronosGroup/Vulkan-Headers.git
