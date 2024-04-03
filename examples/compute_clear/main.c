@@ -4,8 +4,6 @@
 
 #include <stromboli/stromboli.h>
 
-// Next time: Utils and first compute frame?
-
 StromboliSwapchain swapchain;
 StromboliPipeline computePipeline;
 
@@ -14,6 +12,9 @@ VkCommandBuffer commandBuffer;
 VkSemaphore imageAcquireSemaphore;
 VkDescriptorPool descriptorPool;
 VkDescriptorSet descriptorSet;
+
+// Next time: Graphics pipeline
+// Renderpasses
 
 void resizeApplication(StromboliContext* context, u32 width, u32 height) {
     vkDeviceWaitIdle(context->device);
@@ -77,15 +78,10 @@ void renderFrame(StromboliContext* context) {
 
     vkBeginCommandBuffer(commandBuffer, &beginInfo);
         { // Swapchain image Undefined -> General
-            VkImageMemoryBarrier imageBarrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-            imageBarrier.image = swapchain.images[imageIndex];
-            imageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            imageBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-            imageBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            imageBarrier.subresourceRange.layerCount = 1;
-            imageBarrier.subresourceRange.levelCount = 1;
-            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 0, 0, 1, &imageBarrier);
+            VkImageMemoryBarrier2KHR imageBarrier = stromboliCreateImageBarrier(swapchain.images[imageIndex],
+            /*Src*/ VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED,
+            /*Dst*/ VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL);
+            stromboliPipelineBarrier(commandBuffer, 0, 0, 0, 1, &imageBarrier);
         }
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline.pipeline);
@@ -95,15 +91,10 @@ void renderFrame(StromboliContext* context) {
         vkCmdDispatch(commandBuffer, (swapchain.width + workgroupWidth - 1) / workgroupWidth, (swapchain.height + workgroupHeight - 1) / workgroupHeight, 1);
 
         { // Swapchain image General -> Present
-            VkImageMemoryBarrier imageBarrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-            imageBarrier.image = swapchain.images[imageIndex];
-            imageBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-            imageBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            imageBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            imageBarrier.subresourceRange.layerCount = 1;
-            imageBarrier.subresourceRange.levelCount = 1;
-            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, 0, 0, 0, 1, &imageBarrier);
+            VkImageMemoryBarrier2KHR imageBarrier = stromboliCreateImageBarrier(swapchain.images[imageIndex], 
+            /*Src*/ VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL,
+            /*Dst*/ VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+            stromboliPipelineBarrier(commandBuffer, 0, 0, 0, 1, &imageBarrier);
         }
     vkEndCommandBuffer(commandBuffer);
 
@@ -138,7 +129,7 @@ int main(int argc, char** argv) {
     String8 applicationName = STR8_LITERAL("Vulkan Compute Clear");
 
     // Create window
-    GroundedWindow* window = groundedCreateWindow(&(struct GroundedWindowCreateParameters){
+    GroundedWindow* window = groundedCreateWindow(threadContextGetScratch(0), &(struct GroundedWindowCreateParameters){
         .title = applicationName,
         .width = 1920,
         .height = 1080,
@@ -151,16 +142,17 @@ int main(int argc, char** argv) {
         .platformGetRequiredNativeInstanceExtensions = groundedWindowGetVulkanInstanceExtensions,
         .enableValidation = true,
         .enableSynchronizationValidation = true,
+        .synchronization2 = true,
         .computeQueueRequestCount = 1,
-        .descriptorUpdateTemplate = true, //TODO: How can we use either the KHR or non KHR version of the functions? Currently only one of them is loaded depending on vulkan version
-        //.vulkanApiVersion = VK_API_VERSION_1_1,
+        .descriptorUpdateTemplate = true,
+        .vulkanApiVersion = VK_API_VERSION_1_3,
     });
     if(STROMBOLI_ERROR(error)) {
         ASSERT(false);
         return 1;
     }
 
-    swapchain = stromboliSwapchainCreate(&context, groundedWindowGetVulkanSurface(window, context.instance), VK_IMAGE_USAGE_STORAGE_BIT, groundedGetWindowWidth(window), groundedGetWindowHeight(window));
+    swapchain = stromboliSwapchainCreate(&context, groundedWindowGetVulkanSurface(window, context.instance), VK_IMAGE_USAGE_STORAGE_BIT, groundedWindowGetWidth(window), groundedWindowGetHeight(window));
 
     createResources(&context);
 
@@ -168,7 +160,7 @@ int main(int argc, char** argv) {
     u32 eventCount = 0;
     bool running = true;
     while(running) {
-        GroundedEvent* events = groundedPollEvents(&eventCount);
+        GroundedEvent* events = groundedWindowPollEvents(&eventCount);
         for(u32 i = 0; i < eventCount; ++i) {
             if(events[i].type == GROUNDED_EVENT_TYPE_CLOSE_REQUEST) {
                 running = false;

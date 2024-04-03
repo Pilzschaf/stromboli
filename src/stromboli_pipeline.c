@@ -150,6 +150,56 @@ static VkDescriptorSetLayout createSetLayout(StromboliContext* context, struct S
     return result;
 }
 
+ShaderInfo combineShaderInfos(u32 shaderInfoCount, ShaderInfo* shaderInfos) {
+    // We reuse the ShaderInfo type here. ShaderInfo.stage should be ignored
+    ShaderInfo result = {0};
+
+    for(u32 i = 0; i < shaderInfoCount; ++i) {
+        ShaderInfo* info = &shaderInfos[i];
+
+        // Vertex input
+        ASSERT(false);
+        /*if(info->stage == VK_SHADER_STAGE_VERTEX_BIT) {
+            memcpy(&result.vertexInputCreateInfo, &info->vertexInputCreateInfo, sizeof(info->vertexInputCreateInfo));
+        }*/
+        
+        // Descriptor sets
+        for(u32 setIndex = 0; setIndex < 4; ++setIndex) {
+            if(info->descriptorSets[setIndex].descriptorMask) {
+                for(u32 j = 0; j < ARRAY_COUNT(info->descriptorSets[setIndex].descriptorTypes); ++j) {
+                    if(info->descriptorSets[setIndex].descriptorMask & ((u32)1 << j)) {
+                        // Check that type is the same if it is already set
+                        ASSERT(result.descriptorSets[setIndex].descriptorTypes[j] == 0 \
+                            || result.descriptorSets[setIndex].descriptorTypes[j] == info->descriptorSets[setIndex].descriptorTypes[j]);
+                        
+                        result.descriptorSets[setIndex].descriptorTypes[j] = info->descriptorSets[setIndex].descriptorTypes[j];
+                        result.descriptorSets[setIndex].descriptorCounts[j] = info->descriptorSets[setIndex].descriptorCounts[j];
+                        ASSERT(false);
+                        //TODO: result.descriptorSets[setIndex].flags[j] |= info->descriptorSets[setIndex].flags[j];
+
+                        result.descriptorSets[setIndex].stages[j] |= info->stage;
+                        result.descriptorSets[setIndex].descriptorMask |= 1 << j;
+                    }
+                }
+            }
+        }
+
+        // Push constants
+        result.range.size = MAX(result.range.size, info->range.size);
+        result.range.stageFlags |= info->stage;
+
+        // Specialization constants
+        //TODO:
+        /*for(u32 j = 0; j < ARRAY_COUNT(result.constants); ++j) {
+            if(shaderInfos[i].constants[j].name.size) {
+                result.constants[j].name = shaderInfos[i].constants[j].name;
+            }
+        }*/
+    }
+
+    return result;
+}
+
 static VkDescriptorUpdateTemplate createDescriptorUpdateTemplate(StromboliContext* context, struct ShaderDescriptorSetInfo* shaderDescriptorInfo, VkDescriptorSetLayout layout, u32 setIndex, VkPipelineBindPoint bindPoint) {
     u32 currentEntryIndex = 0;
     u32 currentOffset = 0;
@@ -249,6 +299,51 @@ StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, Stri
     result.compute.workgroupHeight = shaderInfo.computeWorkgroupHeight;
     result.compute.workgroupDepth = shaderInfo.computeWorkgroupDepth;
     
+    arenaEndTemp(temp);
+    return result;
+}
+
+StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, struct StromboliGraphicsPipelineParameters* parameters) {
+    MemoryArena* scratch = threadContextGetScratch(0);
+    ArenaTempMemory temp = arenaBeginTemp(scratch);
+
+    ShaderInfo vertexShaderInfo = {0};
+    VkShaderModule vertexShaderModule = createShaderModule(context, scratch, parameters->vertexShaderFilename, &vertexShaderInfo);
+    ShaderInfo fragmentShaderInfo = {0};
+    VkShaderModule fragmentShaderModule = createShaderModule(context, scratch, parameters->fragmentShaderFilename, &fragmentShaderInfo);
+
+    // Merge the shader infos into a single combined info
+    ShaderInfo shaderInfos[] = {vertexShaderInfo, fragmentShaderInfo};
+    ShaderInfo combinedInfo = combineShaderInfos(PASS_ARRAY(shaderInfos));
+
+    VkPipelineShaderStageCreateInfo shaderStages[2] = {0};
+    shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStages[0].module = vertexShaderModule;
+    shaderStages[0].pName = "main";
+    shaderStages[0].stage = vertexShaderInfo.stage;
+    //shaderStages[0].pSpecializationInfo = specializationPointer;
+    shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStages[1].module = fragmentShaderModule;
+    shaderStages[1].pName = "main";
+    shaderStages[1].stage = fragmentShaderInfo.stage;
+    //shaderStages[1].pSpecializationInfo = specializationPointer;
+
+    VkDescriptorSetLayout descriptorLayouts[4] = {0};
+    VkDescriptorUpdateTemplate descriptorUpdateTemplates[4] = {0};
+    VkPipelineLayout pipelineLayout = createPipelineLayout(context, &combinedInfo, descriptorLayouts, descriptorUpdateTemplates, VK_PIPELINE_BIND_POINT_GRAPHICS);
+
+    VkPipeline pipeline;
+    {
+        VkGraphicsPipelineCreateInfo createInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+        createInfo.layout = pipelineLayout;
+        vkCreateGraphicsPipelines(context->device, 0, 1, &createInfo, 0, &pipeline);
+    }
+
+    StromboliPipeline result = {0};
+    result.type = STROMBOLI_PIPELINE_TYPE_GRAPHICS,
+    result.pipeline = pipeline,
+    result.layout = pipelineLayout;
+
     arenaEndTemp(temp);
     return result;
 }

@@ -52,6 +52,8 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
         }
     }
 
+    u32 apiVersion = parameters->vulkanApiVersion ? parameters->vulkanApiVersion : VK_API_VERSION_1_0;
+
     // Should be large enough to hold all layers we can enable
     const char* enabledLayers[2];
     u32 enabledLayerCount = 0;
@@ -103,6 +105,16 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
             memcpy(requestedInstanceExtensions + requestedInstanceExtensionCount, platformInstanceExtensions, sizeof(const char*) * count);
             requestedInstanceExtensionCount += count;
         }
+    }
+
+    // We always request VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME when we create a Vulkan 1.0 instance
+    if(apiVersion < VK_API_VERSION_1_1) {
+        const char** oldRequestedInstanceExtensions = requestedInstanceExtensions;
+        requestedInstanceExtensions = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, requestedInstanceExtensionCount + 1, const char*);
+        memcpy(requestedInstanceExtensions, oldRequestedInstanceExtensions, sizeof(const char*) * requestedInstanceExtensionCount);
+        static const char* extension[] = { VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME };
+        memcpy(requestedInstanceExtensions + requestedInstanceExtensionCount, extension, sizeof(const char*));
+        requestedInstanceExtensionCount += 1;
     }
 
     // Check that both validation layer extensions are actually provided by the layer and enable if they are
@@ -190,7 +202,7 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
         applicationInfo.applicationVersion = VK_MAKE_API_VERSION(0, parameters->applicationMajorVersion, parameters->applicationMinorVersion, parameters->applicationPatchVersion);
         applicationInfo.pEngineName = "Stromboli";
         applicationInfo.engineVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
-        applicationInfo.apiVersion = parameters->vulkanApiVersion ? parameters->vulkanApiVersion : VK_API_VERSION_1_0;
+        applicationInfo.apiVersion = apiVersion;
 
         VkInstanceCreateInfo createInfo = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
         createInfo.pApplicationInfo = &applicationInfo;
@@ -249,7 +261,7 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
     if(parameters->dynamicRendering && context->apiVersion < VK_API_VERSION_1_3) {
         requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME;
     }
-    if(parameters->synchronization2 && context->apiVersion < VK_API_VERSION_1_3) {
+    if(parameters->synchronization2) { //Promoted to VK_API_VERSION_1_3
         requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME;
     }
     if(parameters->maintenance4 && context->apiVersion < VK_API_VERSION_1_3) {
@@ -264,7 +276,7 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
     if(parameters->nonUniformIndexingSampledImageArray && context->apiVersion < VK_API_VERSION_1_2) {
         requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME;
     }
-    if(parameters->descriptorUpdateTemplate && context->apiVersion < VK_API_VERSION_1_1) {
+    if(parameters->descriptorUpdateTemplate) { // Promoted to VK_API_VERSION_1_1
         requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_DESCRIPTOR_UPDATE_TEMPLATE_EXTENSION_NAME;
     }
 
@@ -297,7 +309,7 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
                             break;
                         }
                     }
-                    if (!found) {
+                    if (!found && false) {
                         printf("Could not find device extension %s\n", requestedDeviceExtensions[i]);
                         applicable = false;
                         // Do not break here so we can list all missing requested device extensions
@@ -422,6 +434,11 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
             features13.maintenance4 = parameters->maintenance4;
             *pNextChain = &features13;
             pNextChain = &features13.pNext;
+        } else if(parameters->synchronization2) {
+            VkPhysicalDeviceSynchronization2FeaturesKHR synchronization2Features = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR};
+            synchronization2Features.synchronization2 = true;
+            *pNextChain = &synchronization2Features;
+            pNextChain = &synchronization2Features.pNext;
         }
 
         if(parameters->rayQuery) {

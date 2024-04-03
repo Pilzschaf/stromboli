@@ -75,6 +75,7 @@ typedef struct StromboliSwapchain {
 
 enum StromboliPipelineType {
     STROMBOLI_PIPELINE_TYPE_COMPUTE,
+    STROMBOLI_PIPELINE_TYPE_GRAPHICS,
     STROMBOLI_PIPELINE_TYPE_COUNT,
 };
 
@@ -150,6 +151,14 @@ typedef struct StromboliInitializationParameters {
     bool descriptorBindingPartiallyBound;
 } StromboliInitializationParameters;
 
+typedef struct StromboliGraphicsPipelineParameters {
+    String8 vertexShaderFilename;
+    String8 fragmentShaderFilename;
+
+    //...
+
+} StromboliGraphicsPipelineParameters;
+
 StromboliResult initStromboli(StromboliContext* context, StromboliInitializationParameters* parameters);
 void shutdownStromboli(StromboliContext* context);
 
@@ -158,40 +167,20 @@ StromboliSwapchain stromboliSwapchainCreate(StromboliContext* context, VkSurface
 bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height);
 void stromboliSwapchainDestroy(StromboliContext* context, StromboliSwapchain* swapchain);
 
+
 StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, String8 filename);
+StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, struct StromboliGraphicsPipelineParameters* parameters);
 void stromboliPipelineDestroy(StromboliContext* context, StromboliPipeline* pipeline);
 
 #define STROMBOLI_NAME_OBJECT_EXPLICIT(context, object, type, name) stromboliNameObject(context, INT_FROM_PTR(object), type, name)
 #define STROMBOLI_NAME_OBJECT(context, object, type) STROMBOLI_NAME_OBJECT_EXPLICIT(context, object, type, #object)
-static inline void stromboliNameObject(StromboliContext* context, u64 handle, VkObjectType type, const char* name) {
-	if (vkSetDebugUtilsObjectNameEXT) {
-		VkDebugUtilsObjectNameInfoEXT nameInfo = { 0 };
-		nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
-		nameInfo.objectType = type;
-		nameInfo.objectHandle = handle;
-		nameInfo.pObjectName = name;
-		vkSetDebugUtilsObjectNameEXT(context->device, &nameInfo);
-	}
-}
+static inline void stromboliNameObject(StromboliContext* context, u64 handle, VkObjectType type, const char* name);
 
-static inline StromboliDescriptorInfo stromboliCreateBufferDescriptor(VkBuffer buffer, VkDeviceSize offset, VkDeviceSize range) {
-	StromboliDescriptorInfo result;
+static inline StromboliDescriptorInfo stromboliCreateBufferDescriptor(VkBuffer buffer, VkDeviceSize offset, VkDeviceSize range);
+static inline StromboliDescriptorInfo stromboliCreateImageDescriptor(VkImageLayout imageLayout, VkImageView imageView, VkSampler sampler);
 
-	result.bufferInfo.buffer = buffer;
-	result.bufferInfo.offset = offset;
-	result.bufferInfo.range = range;
+static inline void stromboliPipelineBarrier(VkCommandBuffer commandBuffer, VkDependencyFlags dependencyFlags, u32 bufferBarrierCount, const VkBufferMemoryBarrier2KHR* bufferBarriers, u32 imageBarrierCount, const VkImageMemoryBarrier2KHR* imageBarriers);
 
-	return result;
-}
-
-static inline StromboliDescriptorInfo stromboliCreateImageDescriptor(VkImageLayout imageLayout, VkImageView imageView, VkSampler sampler) {
-	StromboliDescriptorInfo result;
-
-	result.imageInfo.imageLayout = imageLayout;
-	result.imageInfo.imageView = imageView;
-	result.imageInfo.sampler = sampler;
-
-	return result;
-}
+#include "stromboli_helpers.inl"
 
 #endif // STROMBOLI_H
