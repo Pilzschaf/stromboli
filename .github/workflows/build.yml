@@ -1,0 +1,64 @@
+name: Build
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+
+jobs:
+  build-linux-gcc:
+    name: "Build Linux GCC"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Setup Premake5
+        uses: abel0b/setup-premake@v2.2
+        with:
+          version: "5.0.0-beta2"
+      - name: Compile
+        run: |
+          premake5 gmake2
+          make -j 2
+
+  build-linux-clang:
+    name: "Build Linux Clang"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Setup Premake5
+        uses: abel0b/setup-premake@v2.2
+        with:
+          version: "5.0.0-beta2"
+      - name: Compile
+        run: |
+          premake5 --cc=clang gmake2
+          make -j 2
+
+  build-window:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Setup Premake5
+        uses: abel0b/setup-premake@v2.2
+        with:
+          version: "5.0.0-beta2"
+      - name: Setup msbuild
+        uses: microsoft/setup-msbuild@v2
+        with:
+          msbuild-architecture: x64
+      - name: Compile
+        run: |
+          premake5 vs2022
+          msbuild.exe .\Stromboli.sln
