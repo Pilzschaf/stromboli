@@ -145,7 +145,7 @@ int main(int argc, char** argv) {
         .synchronization2 = true,
         .computeQueueRequestCount = 1,
         .descriptorUpdateTemplate = true,
-        .vulkanApiVersion = VK_API_VERSION_1_3,
+        .vulkanApiVersion = VK_API_VERSION_1_0,
     });
     if(STROMBOLI_ERROR(error)) {
         ASSERT(false);
