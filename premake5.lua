@@ -41,7 +41,7 @@ workspace "Stromboli"
             "_GNU_SOURCE",
         }
     
-    filter "system:window"
+    filter "system:windows"
         -- TODO: Check if we should enable stuff like Werror/Wall for windows
         defines
         { 
@@ -66,34 +66,6 @@ project "ComputeClear"
     {
         "StromboliStatic",
         "GroundedStatic",
-    }
-
-project "StromboliStatic"
-    kind "StaticLib"
-    targetdir "bin/static/%{cfg.buildcfg}"
-    files
-    {
-        "src/stromboli_device.c",
-        "src/stromboli_swapchain.c",
-        "src/stromboli_pipeline.c",
-        "libs/SPIRV-Reflect/spirv_reflect.c",
-    }
-    links
-    {
-        "GroundedStatic",
-    }
-
-project "StromboliDynamic"
-    kind "SharedLib"
-    targetdir "bin/dynamic/%{cfg.buildcfg}"
-    files
-    {
-        "src/stromboli_device.c",
-        "src/stromboli_swapchain.c",
-    }
-    links
-    {
-        "GroundedDynamic",
     }
 
 project "GroundedStatic"
@@ -124,4 +96,37 @@ project "GroundedDynamic"
         "libs/grounded/src/threading/grounded_threading.c",
         "libs/grounded/src/window/grounded_window.c",
         "libs/grounded/src/window/grounded_window_extra.c",
+    }
+    filter "system:windows"
+        defines
+        {
+            "GROUNDED_WIN32_DYNAMIC_EXPORT"
+        }
+
+project "StromboliStatic"
+    kind "StaticLib"
+    targetdir "bin/static/%{cfg.buildcfg}"
+    files
+    {
+        "src/stromboli_device.c",
+        "src/stromboli_swapchain.c",
+        "src/stromboli_pipeline.c",
+        "libs/SPIRV-Reflect/spirv_reflect.c",
+    }
+    links
+    {
+        "GroundedStatic",
+    }
+
+project "StromboliDynamic"
+    kind "SharedLib"
+    targetdir "bin/dynamic/%{cfg.buildcfg}"
+    files
+    {
+        "src/stromboli_device.c",
+        "src/stromboli_swapchain.c",
+    }
+    links
+    {
+        "GroundedDynamic",
     }
