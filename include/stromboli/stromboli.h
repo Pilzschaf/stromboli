@@ -151,12 +151,71 @@ typedef struct StromboliInitializationParameters {
     bool descriptorBindingPartiallyBound;
 } StromboliInitializationParameters;
 
+typedef struct StromboliFramebuffer {
+    //StromboliImage images[MAX_FRAMES_IN_FLIGHT];
+    VkFormat format;
+    VkImageUsageFlags usage;
+    VkSampleCountFlags sampleCount;
+} VulkanFramebuffer;
+
+struct StromboliAttachment {
+    VkAttachmentLoadOp loadOp;
+    VkAttachmentStoreOp storeOp;
+    VkImageLayout initialLayout;
+    VkImageLayout usageLayout;
+    VkImageLayout finalLayout;
+    VkClearValue clearColor;
+
+    // Internal use only. This may be overwritten by the implementation. It does not require this to be set to any specific value
+    s32 __assignedSlot;
+};
+
+typedef struct StromboliSubpass {
+    u32 inputAttachmentCount;
+    u32 outputAttachmentCount;
+    struct StromboliAttachment* inputAttachments;
+    struct StromboliAttachment* outputAttachments;
+    struct StromboliAttachment* depthAttachment;
+
+    StromboliSwapchain* swapchainOutput;
+} StromboliSubpass;
+
+typedef struct StromboliRenderpass {
+    VkRenderPass renderPass;
+    VkFramebuffer framebuffers[MAX_SWAPCHAIN_IMAGES];
+    u32 numClearColors;
+    VkClearValue* clearColors;
+} StromboliRenderpass;
+
+enum StromboliPrimitiveMode {
+    STROMBOLI_PRIMITVE_MODE_TRIANGLE_LIST,
+    STROMBOLI_PRIMITVE_MODE_LINE_LIST,
+    STROMBOLI_PRIMITVE_MODE_COUNT,
+};
+
+enum StromboliCullMode {
+    STROMBOLI_CULL_MODE_NONE = 0,
+    STROMBOLI_CULL_MODE_BACK,
+    STROMBOLI_CULL_MODE_FRONT,
+    STROMBOLI_CULL_MODE_COUNT,
+};
+
 typedef struct StromboliGraphicsPipelineParameters {
     String8 vertexShaderFilename;
     String8 fragmentShaderFilename;
 
-    //...
+    VkRenderPass renderPass;
+    u32 subpassIndex;
+    enum StromboliPrimitiveMode primitiveMode;
+    enum StromboliCullMode cullMode;
+    VkSampleCountFlags multisampleCount;
+    u32 additionalAttachmentCount;
 
+    bool wireframe;
+    bool depthTest;
+    bool depthWrite;
+    bool reverseZ;
+    bool enableBlending;
 } StromboliGraphicsPipelineParameters;
 
 StromboliResult initStromboli(StromboliContext* context, StromboliInitializationParameters* parameters);
@@ -167,6 +226,8 @@ StromboliSwapchain stromboliSwapchainCreate(StromboliContext* context, VkSurface
 bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height);
 void stromboliSwapchainDestroy(StromboliContext* context, StromboliSwapchain* swapchain);
 
+StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 subpassCount, StromboliSubpass* subpasses);
+void stromboliRenderpassDestroy(StromboliContext* context, StromboliRenderpass* renderPass);
 
 StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, String8 filename);
 StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, struct StromboliGraphicsPipelineParameters* parameters);

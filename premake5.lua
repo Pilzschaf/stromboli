@@ -70,7 +70,7 @@ project "ComputeClear"
 
 project "GroundedStatic"
     kind "StaticLib"
-    targetdir "bin/static/%{cfg.buildcfg}"
+    targetdir "bin/static/%{cfg.buildcfg:lower()}"
     files
     {
         "libs/grounded/src/file/grounded_file.c",
@@ -85,7 +85,7 @@ project "GroundedStatic"
 
 project "GroundedDynamic"
     kind "SharedLib"
-    targetdir "bin/dynamic/%{cfg.buildcfg}"
+    targetdir "bin/dynamic/%{cfg.buildcfg:lower()}"
     files
     {
         "libs/grounded/src/file/grounded_file.c",
@@ -105,7 +105,7 @@ project "GroundedDynamic"
 
 project "StromboliStatic"
     kind "StaticLib"
-    targetdir "bin/static/%{cfg.buildcfg}"
+    targetdir "bin/static/%{cfg.buildcfg:lower()}"
     files
     {
         "src/stromboli_device.c",
@@ -120,7 +120,7 @@ project "StromboliStatic"
 
 project "StromboliDynamic"
     kind "SharedLib"
-    targetdir "bin/dynamic/%{cfg.buildcfg}"
+    targetdir "bin/dynamic/%{cfg.buildcfg:lower()}"
     files
     {
         "src/stromboli_device.c",

@@ -18,6 +18,7 @@ typedef struct ShaderInfo {
     struct ShaderDescriptorSetInfo descriptorSets[4];
 
     // Options that are only filled out depending on shader type
+    VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo;
     u32 computeWorkgroupWidth;
     u32 computeWorkgroupHeight;
     u32 computeWorkgroupDepth;
@@ -58,7 +59,52 @@ static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena*
     dataSize = 0;
 
     shaderInfo->stage = (VkShaderStageFlagBits)reflectModule.shader_stage;
-    if(shaderInfo->stage == VK_SHADER_STAGE_COMPUTE_BIT) {
+    if(shaderInfo->stage == VK_SHADER_STAGE_VERTEX_BIT) {
+        // Vertex input description
+        u32 inputVariableCount = 0;
+        error = spvReflectEnumerateInputVariables(&reflectModule, &inputVariableCount, 0);
+        ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
+        //TODO: Could use scratch for this allocation
+        SpvReflectInterfaceVariable** inputVariables = ARENA_PUSH_ARRAY(arena, inputVariableCount, SpvReflectInterfaceVariable*);
+        error = spvReflectEnumerateInputVariables(&reflectModule, &inputVariableCount, inputVariables);
+        ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
+        
+        shaderInfo->vertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        VkVertexInputAttributeDescription* vertexAttributes = 0;
+        VkVertexInputBindingDescription* vertexInputBinding = 0;
+        vertexAttributes = ARENA_PUSH_ARRAY(arena, inputVariableCount, VkVertexInputAttributeDescription);
+        vertexInputBinding = ARENA_PUSH_ARRAY(arena, 1, VkVertexInputBindingDescription);
+        
+        u32 currentOffset = 0;
+        u32 currentAttributeIndex = 0;
+        for(u32 j = 0; j < inputVariableCount; ++j) {
+            // built_in was signed before but now seems to be unsigneed (at least on linux) so we also compare to SpvBuiltInMax and assume that no valid value lies above that constant
+            if(inputVariables[j]->built_in >= 0 && inputVariables[j]->built_in < SpvBuiltInMax) {
+                // We don't have to fill out builtins
+                continue;
+            }
+            vertexAttributes[currentAttributeIndex] = (VkVertexInputAttributeDescription){0};
+            vertexAttributes[currentAttributeIndex].location = inputVariables[j]->location;
+            vertexAttributes[currentAttributeIndex].binding = 0;
+            vertexAttributes[currentAttributeIndex].format = (VkFormat)inputVariables[j]->format;
+            vertexAttributes[currentAttributeIndex].offset = currentOffset;
+            currentAttributeIndex++;
+            
+            currentOffset += (inputVariables[j]->numeric.scalar.width / 8) * inputVariables[j]->numeric.vector.component_count;
+        }
+
+        if(currentAttributeIndex > 0) {
+            vertexInputBinding->binding = 0;
+            vertexInputBinding->stride = currentOffset;
+            vertexInputBinding->inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+            // Input variables are vertex attributes
+            shaderInfo->vertexInputCreateInfo.vertexBindingDescriptionCount = 1;
+            shaderInfo->vertexInputCreateInfo.pVertexBindingDescriptions = vertexInputBinding;
+            shaderInfo->vertexInputCreateInfo.vertexAttributeDescriptionCount = currentAttributeIndex;
+            shaderInfo->vertexInputCreateInfo.pVertexAttributeDescriptions = vertexAttributes;
+        }
+    } else if(shaderInfo->stage == VK_SHADER_STAGE_COMPUTE_BIT) {
         const SpvReflectEntryPoint* entryPoint = spvReflectGetEntryPoint(&reflectModule, "main");
         if(entryPoint) {
             shaderInfo->computeWorkgroupWidth = entryPoint->local_size.x;
@@ -158,10 +204,9 @@ ShaderInfo combineShaderInfos(u32 shaderInfoCount, ShaderInfo* shaderInfos) {
         ShaderInfo* info = &shaderInfos[i];
 
         // Vertex input
-        ASSERT(false);
-        /*if(info->stage == VK_SHADER_STAGE_VERTEX_BIT) {
+        if(info->stage == VK_SHADER_STAGE_VERTEX_BIT) {
             memcpy(&result.vertexInputCreateInfo, &info->vertexInputCreateInfo, sizeof(info->vertexInputCreateInfo));
-        }*/
+        }
         
         // Descriptor sets
         for(u32 setIndex = 0; setIndex < 4; ++setIndex) {
@@ -328,6 +373,97 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
     shaderStages[1].stage = fragmentShaderInfo.stage;
     //shaderStages[1].pSpecializationInfo = specializationPointer;
 
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly = {VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+    if(parameters->primitiveMode == STROMBOLI_PRIMITVE_MODE_LINE_LIST) {
+        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    } else {
+        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    }
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    VkPipelineViewportStateCreateInfo viewportState = {VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
+    viewportState.viewportCount = 1; // Still used
+    //viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1; // Still used
+    //viewportState.pScissors = &scissor;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer = {VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    if(parameters->wireframe) {
+        rasterizer.polygonMode = VK_POLYGON_MODE_LINE;
+    } else {
+        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    }
+    rasterizer.lineWidth = 1.0f;
+    if(parameters->cullMode == STROMBOLI_CULL_MODE_BACK) {
+        rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    } else if(parameters->cullMode == STROMBOLI_CULL_MODE_FRONT) {
+        rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
+    } else {
+        rasterizer.cullMode = VK_CULL_MODE_NONE;
+    }
+    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.depthBiasEnable = VK_FALSE;
+
+    VkPipelineMultisampleStateCreateInfo multisampling = {VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+    multisampling.sampleShadingEnable = VK_FALSE;
+    if(parameters->multisampleCount) {
+        multisampling.rasterizationSamples = parameters->multisampleCount;
+    } else {
+        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    }
+
+    VkPipelineDepthStencilStateCreateInfo depthStencilState = {VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+    depthStencilState.depthTestEnable = parameters->depthTest;
+    depthStencilState.depthWriteEnable = parameters->depthWrite;
+    if(parameters->reverseZ) {
+        depthStencilState.depthCompareOp = VK_COMPARE_OP_GREATER;
+    } else {
+        depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS;
+    }
+    if(parameters->depthWrite && !parameters->depthTest) {
+        // This must be emulated by setting depthCompareOp to ALWAYS
+        depthStencilState.depthTestEnable = VK_TRUE;
+        depthStencilState.depthCompareOp = VK_COMPARE_OP_ALWAYS;
+    }
+    depthStencilState.minDepthBounds = 0.0f;
+    depthStencilState.maxDepthBounds = 1.0f;
+
+    u32 attachmentCount = 1 + parameters->additionalAttachmentCount;
+    VkPipelineColorBlendAttachmentState* colorBlendAttachments = ARENA_PUSH_ARRAY(scratch, attachmentCount, VkPipelineColorBlendAttachmentState);
+    colorBlendAttachments[0].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachments[0].blendEnable = parameters->enableBlending ? VK_TRUE : VK_FALSE; // Blending enable
+    colorBlendAttachments[0].srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    colorBlendAttachments[0].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachments[0].colorBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachments[0].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachments[0].dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    colorBlendAttachments[0].alphaBlendOp = VK_BLEND_OP_ADD;
+    for(u32 i = 1; i < attachmentCount; ++i) {
+        colorBlendAttachments[i].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        colorBlendAttachments[i].blendEnable = VK_FALSE; // Blending enable
+        colorBlendAttachments[i].srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        colorBlendAttachments[i].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        colorBlendAttachments[i].colorBlendOp = VK_BLEND_OP_ADD;
+        colorBlendAttachments[i].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        colorBlendAttachments[i].dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        colorBlendAttachments[i].alphaBlendOp = VK_BLEND_OP_ADD;
+    }
+    VkPipelineColorBlendStateCreateInfo colorBlending = {VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+    colorBlending.attachmentCount = attachmentCount;
+    colorBlending.pAttachments = colorBlendAttachments;
+
+    // Available are scissor, line width, blend constants, depth bounds, stencil etc. See https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkDynamicState.html
+    VkDynamicState dynamicStates[] = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR,
+    };
+
+    VkPipelineDynamicStateCreateInfo dynamicState = {VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+    dynamicState.dynamicStateCount = ARRAY_COUNT(dynamicStates);
+    dynamicState.pDynamicStates = dynamicStates;
+
     VkDescriptorSetLayout descriptorLayouts[4] = {0};
     VkDescriptorUpdateTemplate descriptorUpdateTemplates[4] = {0};
     VkPipelineLayout pipelineLayout = createPipelineLayout(context, &combinedInfo, descriptorLayouts, descriptorUpdateTemplates, VK_PIPELINE_BIND_POINT_GRAPHICS);
@@ -335,14 +471,35 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
     VkPipeline pipeline;
     {
         VkGraphicsPipelineCreateInfo createInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+        createInfo.flags = 0;
+        createInfo.stageCount = ARRAY_COUNT(shaderStages);
+        createInfo.pStages = shaderStages;
+        createInfo.pVertexInputState = &combinedInfo.vertexInputCreateInfo;
+        createInfo.pTessellationState = 0;
+        createInfo.pViewportState = &viewportState;
+        createInfo.pRasterizationState = &rasterizer;
+        createInfo.pMultisampleState = &multisampling;
+        createInfo.pDepthStencilState = &depthStencilState;
+        createInfo.pDynamicState = &dynamicState;
         createInfo.layout = pipelineLayout;
+        createInfo.renderPass = parameters->renderPass;
+        createInfo.subpass = parameters->subpassIndex;
+
         vkCreateGraphicsPipelines(context->device, 0, 1, &createInfo, 0, &pipeline);
     }
+
+    // Shader module can be destroyed after pipeline creation
+    vkDestroyShaderModule(context->device, vertexShaderModule, 0);
+    vkDestroyShaderModule(context->device, fragmentShaderModule, 0);
 
     StromboliPipeline result = {0};
     result.type = STROMBOLI_PIPELINE_TYPE_GRAPHICS,
     result.pipeline = pipeline,
     result.layout = pipelineLayout;
+    for(u32 i = 0; i < 4; ++i) {
+        result.descriptorLayouts[i] = descriptorLayouts[i];
+        result.updateTemplates[i] = descriptorUpdateTemplates[i];
+    }
 
     arenaEndTemp(temp);
     return result;
