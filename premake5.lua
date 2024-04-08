@@ -10,8 +10,8 @@ workspace "Stromboli"
     language "C"
     cdialect "C11"
     staticruntime "on"
-    objdir "obj/%{cfg.buildcfg}" -- Check if we can use cfg.buildcfg in lowercase
-    targetdir "bin/examples/%{cfg.buildcfg}"
+    objdir "obj/%{cfg.buildcfg:lower()}"
+    targetdir "bin/examples/%{cfg.buildcfg:lower()}"
     characterset "Unicode"
 
     includedirs

@@ -175,15 +175,17 @@ int main(int argc, char** argv) {
         renderFrame(&context);
     }
 
+    // Wait for device to finish work before releasing resources
     vkDeviceWaitIdle(context.device);
 
+    // Release Vulkan resources
     destroyResources(&context);
     stromboliPipelineDestroy(&context, &computePipeline);
     stromboliSwapchainDestroy(&context, &swapchain);
     vkDestroySurfaceKHR(context.instance, swapchain.surface, 0);
     shutdownStromboli(&context);
 
-    // Release resources
+    // Release window resources
     groundedDestroyWindow(window);
     groundedShutdownWindowSystem();
 
