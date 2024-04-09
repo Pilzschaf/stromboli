@@ -61,3 +61,19 @@ static inline VkImageMemoryBarrier2 stromboliCreateImageBarrier(VkImage image, V
 
 	return result;
 }
+
+static inline void stromboliCmdSetViewportAndScissor(VkCommandBuffer commandBuffer, u32 width, u32 height) {
+	VkViewport viewport = { 0 };
+	viewport.width = (float)width,
+		viewport.height = (float)height,
+		viewport.maxDepth = 1.0f,
+
+		vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+	VkRect2D scissors = { 0 };
+	scissors.offset.x = 0;
+	scissors.offset.y = 0;
+	scissors.extent.width = width;
+	scissors.extent.height = height;
+
+	vkCmdSetScissor(commandBuffer, 0, 1, &scissors);
+}

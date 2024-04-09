@@ -476,10 +476,12 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
         createInfo.pStages = shaderStages;
         createInfo.pVertexInputState = &combinedInfo.vertexInputCreateInfo;
         createInfo.pTessellationState = 0;
+        createInfo.pInputAssemblyState = &inputAssembly;
         createInfo.pViewportState = &viewportState;
         createInfo.pRasterizationState = &rasterizer;
         createInfo.pMultisampleState = &multisampling;
         createInfo.pDepthStencilState = &depthStencilState;
+        createInfo.pColorBlendState = &colorBlending;
         createInfo.pDynamicState = &dynamicState;
         createInfo.layout = pipelineLayout;
         createInfo.renderPass = parameters->renderPass;

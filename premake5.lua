@@ -111,6 +111,7 @@ project "StromboliStatic"
         "src/stromboli_device.c",
         "src/stromboli_swapchain.c",
         "src/stromboli_pipeline.c",
+        "src/stromboli_renderpass.c",
         "libs/SPIRV-Reflect/spirv_reflect.c",
     }
     links
@@ -125,6 +126,9 @@ project "StromboliDynamic"
     {
         "src/stromboli_device.c",
         "src/stromboli_swapchain.c",
+        "src/stromboli_pipeline.c",
+        "src/stromboli_renderpass.c",
+        "libs/SPIRV-Reflect/spirv_reflect.c",
     }
     links
     {
