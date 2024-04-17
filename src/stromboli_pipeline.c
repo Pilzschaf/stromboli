@@ -484,8 +484,21 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
         createInfo.pColorBlendState = &colorBlending;
         createInfo.pDynamicState = &dynamicState;
         createInfo.layout = pipelineLayout;
-        createInfo.renderPass = parameters->renderPass;
-        createInfo.subpass = parameters->subpassIndex;
+
+        // VK_KHR_dynamic_rendering
+        VkPipelineRenderingCreateInfo pipelineRenderingInfo = {VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+        if(!parameters->renderPass) {
+            pipelineRenderingInfo.colorAttachmentCount = 1;
+            pipelineRenderingInfo.pColorAttachmentFormats = &parameters->framebufferFormat;
+            /*if(parameters->depthFormat != VK_FORMAT_UNDEFINED) {
+                pipelineRenderingInfo.depthAttachmentFormat = parameters->depthFormat;
+            }*/
+            //pipelineRnderingInfo.stencilAttachmentFormat = ;
+            createInfo.pNext = &pipelineRenderingInfo;
+        } else {
+            createInfo.renderPass = parameters->renderPass;
+            createInfo.subpass = parameters->subpassIndex;
+        }
 
         vkCreateGraphicsPipelines(context->device, 0, 1, &createInfo, 0, &pipeline);
     }

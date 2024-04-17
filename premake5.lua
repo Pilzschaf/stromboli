@@ -21,6 +21,7 @@ workspace "Stromboli"
         "libs",
         "libs/SPIRV-Reflect",
         "libs/Vulkan-Headers/include",
+        "libs/VulkanMemoryAllocator/include",
     }
     defines
     {
@@ -112,6 +113,7 @@ project "StromboliStatic"
         "src/stromboli_swapchain.c",
         "src/stromboli_pipeline.c",
         "src/stromboli_renderpass.c",
+        "src/stromboli_utils.c",
         "libs/SPIRV-Reflect/spirv_reflect.c",
     }
     links
@@ -128,6 +130,7 @@ project "StromboliDynamic"
         "src/stromboli_swapchain.c",
         "src/stromboli_pipeline.c",
         "src/stromboli_renderpass.c",
+        "src/stromboli_utils.c",
         "libs/SPIRV-Reflect/spirv_reflect.c",
     }
     links

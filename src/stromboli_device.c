@@ -491,8 +491,8 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
         arenaEndTemp(temp);
     }
 
-#if 0
-    if(VULKAN_NO_ERROR(error)) { // Create vma allocator
+#if 1
+    if(STROMBOLI_NO_ERROR(error)) { // Create vma allocator
         VmaVulkanFunctions vmaFunctions = {0};
         vmaFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
         vmaFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
@@ -567,6 +567,9 @@ StromboliResult initStromboli(StromboliContext* context, StromboliInitialization
 }
 
 void shutdownStromboli(StromboliContext* context) {
+    if(context->vmaAllocator) {
+        vmaDestroyAllocator(context->vmaAllocator);
+    }
     if(context->device) {
         vkDestroyDevice(context->device, 0);
     }

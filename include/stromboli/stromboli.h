@@ -3,6 +3,7 @@
 
 #include <grounded/string/grounded_string.h>
 #include <volk/volk.h>
+#include <vk_mem_alloc.h>
 
 #define STROMBOLI_SUCCESS() ((StromboliResult){0})
 #define STROMBOLI_MAKE_ERROR(code, text) ((StromboliResult){code, STR8_LITERAL(text)})
@@ -46,6 +47,7 @@ typedef struct StromboliContext {
     u32 computeQueueCount;
     u32 transferQueueCount;
 
+    VmaAllocator vmaAllocator;
 } StromboliContext;
 
 typedef enum StromboliErrorCode {
@@ -93,6 +95,25 @@ typedef struct StromboliPipeline {
         u32 workgroupDepth;
     } compute;
 } StromboliPipeline;
+
+typedef struct StromboliImage {
+    VkImage image;
+    VkImageView view;
+    u32 width, height, depth, mipCount;
+
+    VmaAllocation allocation;
+
+} StromboliImage;
+
+struct StromboliImageParameters {
+    u32 depth; // Can be left 0 for 2D images
+    VkSampleCountFlags sampleCount; // Value of 0 also means VK_SAMPLE_COUNT_1_BIT
+    VkImageTiling tiling; // Optimal by default
+    u32 mipCount; // Value of 0 means a single mip eg. no mip mapping
+    u32 layerCount; // Value of 0 or 1 means a single layer
+    bool requireCPUAccess;
+    bool cubemap;
+};
 
 typedef struct StromboliDescriptorInfo {
     union {
@@ -207,6 +228,7 @@ typedef struct StromboliGraphicsPipelineParameters {
     enum StromboliCullMode cullMode;
     VkSampleCountFlags multisampleCount;
     u32 additionalAttachmentCount;
+    VkFormat framebufferFormat;
 
     bool wireframe;
     bool depthTest;
@@ -229,6 +251,9 @@ void stromboliRenderpassDestroy(StromboliContext* context, StromboliRenderpass* 
 StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, String8 filename);
 StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, struct StromboliGraphicsPipelineParameters* parameters);
 void stromboliPipelineDestroy(StromboliContext* context, StromboliPipeline* pipeline);
+
+StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage, struct StromboliImageParameters* parameters);
+void stromboliImageDestroy(StromboliContext* context, StromboliImage* image);
 
 #define STROMBOLI_NAME_OBJECT_EXPLICIT(context, object, type, name) stromboliNameObject(context, INT_FROM_PTR(object), type, name)
 #define STROMBOLI_NAME_OBJECT(context, object, type) STROMBOLI_NAME_OBJECT_EXPLICIT(context, object, type, #object)
