@@ -75,9 +75,18 @@ typedef struct StromboliSwapchain {
     VkImageView imageViews[MAX_SWAPCHAIN_IMAGES];
 } StromboliSwapchain;
 
+typedef struct StromboliBuffer {
+	VkBuffer buffer;
+	VkDeviceMemory memory;
+    u64 size;
+    void* mapped; // If this buffer is host visible this points to the buffer data
+    VmaAllocation allocation;
+} StromboliBuffer;
+
 enum StromboliPipelineType {
     STROMBOLI_PIPELINE_TYPE_COMPUTE,
     STROMBOLI_PIPELINE_TYPE_GRAPHICS,
+    STROMBOLI_PIPELINE_TYPE_RAYTRACING,
     STROMBOLI_PIPELINE_TYPE_COUNT,
 };
 
@@ -90,11 +99,25 @@ typedef struct StromboliPipeline {
 
     enum StromboliPipelineType type;
     union {
-        u32 workgroupWidth;
-        u32 workgroupHeight;
-        u32 workgroupDepth;
-    } compute;
+        struct {
+            u32 workgroupWidth;
+            u32 workgroupHeight;
+            u32 workgroupDepth;
+        } compute;
+        struct {
+            StromboliBuffer sbtBuffer;
+            VkStridedDeviceAddressRegionKHR sbtRayGenRegion;
+            VkStridedDeviceAddressRegionKHR sbtMissRegion;
+            VkStridedDeviceAddressRegionKHR sbtHitRegion;
+            VkStridedDeviceAddressRegionKHR sbtCallableRegion;
+        } raytracing;
+    };
 } StromboliPipeline;
+
+typedef struct {
+    VkAccelerationStructureKHR accelerationStructure;
+    StromboliBuffer accelerationStructureBuffer;
+} StromboliAccelerationStructure;
 
 typedef struct StromboliImage {
     VkImage image;
@@ -115,10 +138,18 @@ struct StromboliImageParameters {
     bool cubemap;
 };
 
+typedef struct StromboliFramebuffer {
+    StromboliImage images[MAX_SWAPCHAIN_IMAGES];
+    VkFormat format;
+    VkImageUsageFlags usage;
+    VkSampleCountFlags sampleCount;
+} StromboliFramebuffer;
+
 typedef struct StromboliDescriptorInfo {
     union {
         VkDescriptorBufferInfo bufferInfo;
         VkDescriptorImageInfo imageInfo;
+        VkAccelerationStructureKHR accelerationStructureInfo;
     };
 } StromboliDescriptorInfo;
 
@@ -237,6 +268,43 @@ typedef struct StromboliGraphicsPipelineParameters {
     bool enableBlending;
 } StromboliGraphicsPipelineParameters;
 
+struct StromboliIntersectionShaderSlot {
+    const char* filename;
+    u32 matchingHitShaderIndex;
+};
+
+struct StromboliRaytracingPipelineParameters {
+    // Multile raygen shaders are possible but each launch can only use one
+    const char* raygenShaderFilename;
+
+    const char** missShaderFilenames;
+    u32 missShaderCount;
+
+    const char** hitShaderFilenames;
+    u32 hitShaderCount;
+
+    struct StromboliIntersectionShaderSlot* intersectionShaders;
+    u32 intersectionShaderCount;
+
+    //TODO: Any hit shaders should work similarily to interseciton shaders and must specify an index for the corresponding hit shader
+};
+
+// An upload context is used for the upload of data into device local buffers.
+#define STROMBOLI_UPLOAD_CONTEXT_RECORDING     0x01
+#define STROMBOLI_UPLOAD_CONTEXT_SUBMIT_ACTIVE 0x02
+#define STROMBOLI_UPLOAD_CONTEXT_OWNS_BUFFER   0x04
+#define STROMBOLI_UPLOAD_CONTEXT_USE_QUEUE(queue) &(StromboliUploadContext){queue}
+typedef struct StromboliUploadContext {
+    StromboliQueue* queue;
+    VkCommandPool commandPool;
+    VkCommandBuffer commandBuffer;
+    VkFence fence;
+    StromboliBuffer* scratch;
+    StromboliBuffer ownedBuffer;
+    u64 scratchOffset;
+    u32 flags;
+} StromboliUploadContext;
+
 StromboliResult initStromboli(StromboliContext* context, StromboliInitializationParameters* parameters);
 void shutdownStromboli(StromboliContext* context);
 
@@ -250,9 +318,16 @@ void stromboliRenderpassDestroy(StromboliContext* context, StromboliRenderpass* 
 
 StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, String8 filename);
 StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, struct StromboliGraphicsPipelineParameters* parameters);
+StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct StromboliRaytracingPipelineParameters* parameters);
 void stromboliPipelineDestroy(StromboliContext* context, StromboliPipeline* pipeline);
 
+StromboliBuffer stromboliCreateBuffer(StromboliContext* context, u64 size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryProperties);
+void uploadDataToBuffer(StromboliContext* context, StromboliBuffer* buffer, void* data, size_t size, StromboliUploadContext* uploadContext);
+void uploadDataToImageSubregion(StromboliContext* context, StromboliImage* image, void* data, u64 size, u32 width, u32 height, u32 depth, u32 mipLevel, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext);
+void destroyBuffer(StromboliContext* context, StromboliBuffer* buffer);
+
 StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage, struct StromboliImageParameters* parameters);
+void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image, void* data, u64 size, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext);
 void stromboliImageDestroy(StromboliContext* context, StromboliImage* image);
 
 #define STROMBOLI_NAME_OBJECT_EXPLICIT(context, object, type, name) stromboliNameObject(context, INT_FROM_PTR(object), type, name)
@@ -263,6 +338,25 @@ static inline StromboliDescriptorInfo stromboliCreateBufferDescriptor(VkBuffer b
 static inline StromboliDescriptorInfo stromboliCreateImageDescriptor(VkImageLayout imageLayout, VkImageView imageView, VkSampler sampler);
 
 static inline void stromboliPipelineBarrier(VkCommandBuffer commandBuffer, VkDependencyFlags dependencyFlags, u32 bufferBarrierCount, const VkBufferMemoryBarrier2KHR* bufferBarriers, u32 imageBarrierCount, const VkImageMemoryBarrier2KHR* imageBarriers);
+
+StromboliUploadContext createUploadContext(StromboliContext* context, StromboliQueue* queue, StromboliBuffer* scratch);
+void destroyUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext);
+StromboliUploadContext ensureValidUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext);
+void beginRecordUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext);
+VkCommandBuffer ensureUploadContextIsRecording(StromboliContext* context, StromboliUploadContext* uploadContext);
+u64 uploadToScratch(StromboliContext* context, StromboliUploadContext* uploadContext, void* data, u64 size);
+void submitUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext, u32 signalSemaphoreCount, VkSemaphore* signalSemaphores);
+void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext);
+
+void createFramebuffer(StromboliContext* context, StromboliFramebuffer* framebuffer, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage);
+void createFramebufferMultisampled(StromboliContext* context, StromboliFramebuffer* framebuffer, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage, VkSampleCountFlags sampleCount);
+void resizeFramebuffer(StromboliContext* context, StromboliFramebuffer* framebuffer, u32 width, u32 height);
+void destroyFramebuffer(StromboliContext* context, StromboliFramebuffer* framebuffer);
+
+VkDeviceAddress getBufferDeviceAddress(StromboliContext* context, StromboliBuffer* buffer);
+StromboliAccelerationStructure createAccelerationStructure(StromboliContext* context, u32 count, VkAccelerationStructureGeometryKHR* geometries, VkAccelerationStructureBuildRangeInfoKHR* buildRanges, bool allowUpdate, bool compact, StromboliUploadContext* uploadContext);
+void updateAccelerationStructure(StromboliContext* context, StromboliAccelerationStructure* accelerationStructure, u32 count, VkAccelerationStructureGeometryKHR* geometries, VkAccelerationStructureBuildRangeInfoKHR* buildRanges, StromboliUploadContext* uploadContext);
+void destroyAccelerationStructure(StromboliContext* context, StromboliAccelerationStructure* accelerationStructure);
 
 #include "stromboli_helpers.inl"
 
