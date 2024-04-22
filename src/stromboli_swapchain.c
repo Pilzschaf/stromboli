@@ -131,6 +131,7 @@ static bool createSwapchain(StromboliContext* context, StromboliSwapchain* swapc
 
 			// Create image views
 			for (u32 i = 0; i < swapchain->numImages; ++i) {
+				STROMBOLI_NAME_OBJECT_EXPLICIT(context, swapchain->images[i], VK_OBJECT_TYPE_IMAGE, "Swapchain image");
 				VkImageViewCreateInfo createInfo = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
 				createInfo.image = swapchain->images[i];
 				createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
