@@ -1,7 +1,7 @@
 #include <stromboli/stromboli.h>
 #include <stdio.h>
 
-static bool isDepthFormat(VkFormat format) {
+bool isDepthFormat(VkFormat format) {
 	if( format == VK_FORMAT_D32_SFLOAT || 
 		format == VK_FORMAT_D32_SFLOAT_S8_UINT ||
 		format == VK_FORMAT_D16_UNORM ||
@@ -139,6 +139,7 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 	result.height = height;
 	result.depth = depth;
 	result.mipCount = mipChainLength;
+	result.format = format;
 	return result;
 }
 
@@ -413,7 +414,6 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 	createInfo.size = size;
 	createInfo.usage = usage;
 	
-
 	if(!(usage & VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR)) {
 		VmaAllocationCreateInfo allocInfo = {0};
 		allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
@@ -426,7 +426,8 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 		VkMemoryRequirements memoryRequirements;
 		vkGetBufferMemoryRequirements(context->device, result.buffer, &memoryRequirements);
 		// Once this assert triggers, this workaround should not be needed anymore and the complete else branch can be deleted
-		ASSERT(memoryRequirements.alignment == 4);
+		//ASSERT(memoryRequirements.alignment == 4);
+		//TODO: Has triggered so look into how to remove the branch
 
 		u32 memoryIndex = findMemoryType(context, memoryRequirements.memoryTypeBits, memoryProperties);
 		ASSERT(memoryIndex != UINT32_MAX);

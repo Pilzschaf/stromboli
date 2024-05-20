@@ -123,6 +123,7 @@ typedef struct StromboliImage {
     VkImage image;
     VkImageView view;
     u32 width, height, depth, mipCount;
+    VkFormat format;
 
     VmaAllocation allocation;
 
@@ -347,6 +348,7 @@ VkCommandBuffer ensureUploadContextIsRecording(StromboliContext* context, Stromb
 u64 uploadToScratch(StromboliContext* context, StromboliUploadContext* uploadContext, void* data, u64 size);
 void submitUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext, u32 signalSemaphoreCount, VkSemaphore* signalSemaphores);
 void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext);
+bool isDepthFormat(VkFormat format);
 
 void createFramebuffer(StromboliContext* context, StromboliFramebuffer* framebuffer, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage);
 void createFramebufferMultisampled(StromboliContext* context, StromboliFramebuffer* framebuffer, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage, VkSampleCountFlags sampleCount);
