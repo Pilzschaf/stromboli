@@ -360,6 +360,8 @@ StromboliAccelerationStructure createAccelerationStructure(StromboliContext* con
 void updateAccelerationStructure(StromboliContext* context, StromboliAccelerationStructure* accelerationStructure, u32 count, VkAccelerationStructureGeometryKHR* geometries, VkAccelerationStructureBuildRangeInfoKHR* buildRanges, StromboliUploadContext* uploadContext);
 void destroyAccelerationStructure(StromboliContext* context, StromboliAccelerationStructure* accelerationStructure);
 
+#ifndef __cplusplus
 #include "stromboli_helpers.inl"
+#endif
 
 #endif // STROMBOLI_H

@@ -83,7 +83,10 @@ static inline void stromboliCmdBeginRenderpass(VkCommandBuffer commandBuffer, St
 	beginInfo.clearValueCount = renderpass->numClearColors;
 	beginInfo.pClearValues = renderpass->clearColors;
 	beginInfo.framebuffer = renderpass->framebuffers[imageIndex];
-	beginInfo.renderArea = (VkRect2D){.offset = {0, 0}, .extent = {width, height}};
+	beginInfo.renderArea.offset.x = 0;
+	beginInfo.renderArea.offset.y = 0;
+	beginInfo.renderArea.extent.width = width;
+	beginInfo.renderArea.extent.height = height;
 	vkCmdBeginRenderPass(commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
 
