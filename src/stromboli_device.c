@@ -62,24 +62,25 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
         GROUNDED_LOG_INFO("Validation layer has been requested by the application");
         u32 availableLayerCount = 0;
         VkLayerProperties* availableLayers;
+        bool foundValidationLayers = false;
         vkEnumerateInstanceLayerProperties(&availableLayerCount, 0);
         if(availableLayerCount > 0) {
             availableLayers = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, availableLayerCount, VkLayerProperties);
             if(availableLayers) {
                 vkEnumerateInstanceLayerProperties(&availableLayerCount, availableLayers);
+                for(u32 i = 0; i < availableLayerCount; ++i) {
+                    if(strcmp(availableLayers[i].layerName, "VK_LAYER_KHRONOS_validation") == 0) {
+                        u32 major = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
+                        u32 minor = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
+                        u32 patch = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
+                        printf("Enabling Khronos validation layer. Spec version: %u.%u.%u\n", major, minor, patch);
+                        foundValidationLayers = true;
+                        break;
+                    }
+                }
             }
         }
-        bool foundValidationLayers = false;
-        for(u32 i = 0; i < availableLayerCount; ++i) {
-            if(strcmp(availableLayers[i].layerName, "VK_LAYER_KHRONOS_validation") == 0) {
-                u32 major = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
-                u32 minor = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
-                u32 patch = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
-                printf("Enabling Khronos validation layer. Spec version: %u.%u.%u\n", major, minor, patch);
-                foundValidationLayers = true;
-                break;
-            }
-        }
+        
         if(!foundValidationLayers) {
             GROUNDED_LOG_WARNING("Validation layer could not be found. Are the Vulkan validation layers / The Vulkan SDK installed?");
         } else {
@@ -309,10 +310,11 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
                             break;
                         }
                     }
-                    if (!found && false) {
+                    if (!found) {
                         printf("Could not find device extension %s\n", requestedDeviceExtensions[i]);
                         applicable = false;
                         // Do not break here so we can list all missing requested device extensions
+                        printf("GPU %s not used because extension %s is missing\n", properties.deviceName, requestedDeviceExtensions[i]);
                     }
                 }
             }
