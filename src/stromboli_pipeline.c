@@ -16,6 +16,7 @@ typedef struct ShaderInfo {
     VkShaderStageFlagBits stage;
     VkPushConstantRange range;
     struct ShaderDescriptorSetInfo descriptorSets[4];
+    //StromboliSpecializationConstant constants[4]; //TODO: Current maximum of 4
 
     // Options that are only filled out depending on shader type
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo;
@@ -167,6 +168,21 @@ static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena*
             shaderInfo->range.stageFlags |= shaderInfo->stage;
         }
     }
+
+    /*{ // Specialization constants
+        u32 numSpecializationConstants = 0;
+        error = spvReflectEnumerateSpecializationConstants(&reflectModule, &numSpecializationConstants, 0);
+        ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
+        SpvReflectSpecializationConstant* specializationConstants = ARENA_PUSH_ARRAY_NO_CLEAR(arena, numSpecializationConstants, SpvReflectSpecializationConstant);
+        error = spvReflectEnumerateSpecializationConstants(&reflectModule, &numSpecializationConstants, &specializationConstants);
+        ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
+        for(u32 i = 0; i < numSpecializationConstants; ++i) {
+            String8 name = str8FromCstr(specializationConstants[i].name);
+            u32 index = specializationConstants[i].constant_id;
+            ASSERT(index < ARRAY_COUNT(shaderInfo->constants));
+            shaderInfo->constants[index].name = str8Copy(arena, name);
+        }
+    }*/
 
     spvReflectDestroyShaderModule(&reflectModule);
     STROMBOLI_NAME_OBJECT_EXPLICIT(context, result, VK_OBJECT_TYPE_SHADER_MODULE, str8GetCstr(arena, filename));
@@ -382,17 +398,52 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
     ShaderInfo shaderInfos[] = {vertexShaderInfo, fragmentShaderInfo};
     ShaderInfo combinedInfo = combineShaderInfos(PASS_ARRAY(shaderInfos));
 
+    // SpecializationConstants
+    VkSpecializationInfo specialization;
+    VkSpecializationInfo* specializationPointer = 0;
+    if(parameters->constants && parameters->constantsCount) {
+        VkSpecializationMapEntry* specializationEntries = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, parameters->constantsCount, VkSpecializationMapEntry);
+        for(u32 i = 0; i < parameters->constantsCount; ++i) {
+            s32 index = -1;
+            //TODO: Once spirv reflect supports spec constants we can improve this by actually looking at the shader spec constant defines. We simply use i as index for now
+            /*for(u32 j = 0; j < ARRAY_COUNT(combinedInfo.constants); ++j) {
+                if(combinedInfo.constants[j].name.size) {
+                    if(str8Compare(combinedInfo.constants[j].name, parameters->constants[i].name)) {
+                        index = j;
+                        break;
+                    }
+                }
+            }*/
+            index = i;
+            if(index >= 0) {
+                specializationEntries[index].constantID = i;
+                specializationEntries[index].offset = i * 4;
+                specializationEntries[index].size = sizeof(int);
+            } else {
+                // Not found
+            }
+        }
+
+        specialization = (VkSpecializationInfo){
+            .mapEntryCount = parameters->constantsCount,
+            .pMapEntries = specializationEntries,
+            .dataSize = sizeof(int),
+            .pData = &parameters->constants,
+        };
+        specializationPointer = &specialization;
+    }
+
     VkPipelineShaderStageCreateInfo shaderStages[2] = {0};
     shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shaderStages[0].module = vertexShaderModule;
     shaderStages[0].pName = "main";
     shaderStages[0].stage = vertexShaderInfo.stage;
-    //shaderStages[0].pSpecializationInfo = specializationPointer;
+    shaderStages[0].pSpecializationInfo = specializationPointer;
     shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shaderStages[1].module = fragmentShaderModule;
     shaderStages[1].pName = "main";
     shaderStages[1].stage = fragmentShaderInfo.stage;
-    //shaderStages[1].pSpecializationInfo = specializationPointer;
+    shaderStages[1].pSpecializationInfo = specializationPointer;
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = {VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     if(parameters->primitiveMode == STROMBOLI_PRIMITVE_MODE_LINE_LIST) {

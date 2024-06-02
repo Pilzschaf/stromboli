@@ -250,6 +250,14 @@ enum StromboliCullMode {
     STROMBOLI_CULL_MODE_COUNT,
 };
 
+typedef struct StromboliSpecializationConstant {
+    String8 name;
+    union {
+        int intOrBoolValue;
+        float floatValue;
+    };
+} StromboliSpecializationConstant;
+
 typedef struct StromboliGraphicsPipelineParameters {
     String8 vertexShaderFilename;
     String8 fragmentShaderFilename;
@@ -261,6 +269,9 @@ typedef struct StromboliGraphicsPipelineParameters {
     VkSampleCountFlags multisampleCount;
     u32 additionalAttachmentCount;
     VkFormat framebufferFormat;
+
+    StromboliSpecializationConstant* constants;
+    u32 constantsCount;
 
     bool wireframe;
     bool depthTest;
