@@ -114,6 +114,17 @@ typedef struct StromboliPipeline {
     };
 } StromboliPipeline;
 
+// Pipelines must be built with explicit formats for its attachments. How to handle switchable formats? Could do complicated stuff like recreating on demand etc.
+// But best and simplest solution would be a multi format pipeline where upon build time a certain set of supported format combinations is passed in and the pipeline is built for each of them.
+// Upon rendering we retrieve the pipeline for our current configuration
+typedef struct StromboliMultiFormatPipeline {
+    StromboliPipeline pipeline;
+    struct StromboliPipelineFormatEntry {
+        VkFormat format;
+        VkPipeline pipeline;
+    } entries[16];
+} StromboliMultiFormatPipeline;
+
 typedef struct {
     VkAccelerationStructureKHR accelerationStructure;
     StromboliBuffer accelerationStructureBuffer;
@@ -269,6 +280,7 @@ typedef struct StromboliGraphicsPipelineParameters {
     VkSampleCountFlags multisampleCount;
     u32 additionalAttachmentCount;
     VkFormat framebufferFormat;
+    VkFormat depthFormat;
 
     StromboliSpecializationConstant* constants;
     u32 constantsCount;
@@ -330,8 +342,10 @@ void stromboliRenderpassDestroy(StromboliContext* context, StromboliRenderpass* 
 
 StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, String8 filename);
 StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, struct StromboliGraphicsPipelineParameters* parameters);
+StromboliMultiFormatPipeline stromboliPipelineCreateMultiFormatGraphics(StromboliContext* context, struct StromboliGraphicsPipelineParameters* parameters);
 StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct StromboliRaytracingPipelineParameters* parameters);
 void stromboliPipelineDestroy(StromboliContext* context, StromboliPipeline* pipeline);
+StromboliPipeline stromboliPipelineRetrieveForFormat(StromboliMultiFormatPipeline multiFormatPipeline, VkFormat targetFormat);
 
 StromboliBuffer stromboliCreateBuffer(StromboliContext* context, u64 size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryProperties);
 void uploadDataToBuffer(StromboliContext* context, StromboliBuffer* buffer, void* data, size_t size, StromboliUploadContext* uploadContext);

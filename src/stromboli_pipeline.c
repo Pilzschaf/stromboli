@@ -562,12 +562,13 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
         if(!parameters->renderPass) {
             pipelineRenderingInfo.colorAttachmentCount = 1;
             pipelineRenderingInfo.pColorAttachmentFormats = &parameters->framebufferFormat;
-            /*if(parameters->depthFormat != VK_FORMAT_UNDEFINED) {
+            if(parameters->depthFormat != VK_FORMAT_UNDEFINED) {
                 pipelineRenderingInfo.depthAttachmentFormat = parameters->depthFormat;
-            }*/
+            }
             //pipelineRnderingInfo.stencilAttachmentFormat = ;
             createInfo.pNext = &pipelineRenderingInfo;
         } else {
+            ASSERT(parameters->renderPass);
             createInfo.renderPass = parameters->renderPass;
             createInfo.subpass = parameters->subpassIndex;
         }

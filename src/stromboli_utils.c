@@ -380,7 +380,9 @@ StromboliAccelerationStructure createAccelerationStructure(StromboliContext* con
 }
 
 void destroyAccelerationStructure(StromboliContext* context, StromboliAccelerationStructure* accelerationStructure) {
-	vkDestroyAccelerationStructureKHR(context->device, accelerationStructure->accelerationStructure, 0);
+	if(vkDestroyAccelerationStructureKHR) {
+		vkDestroyAccelerationStructureKHR(context->device, accelerationStructure->accelerationStructure, 0);
+	}
 	destroyBuffer(context, &accelerationStructure->accelerationStructureBuffer);
 }
 
