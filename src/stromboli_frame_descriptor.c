@@ -38,6 +38,9 @@ void stromboliFrameDescriptorInit(StromboliContext* context) {
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 512},
         };
         VkDescriptorPoolCreateInfo createInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+        //TODO: Look at VK_DESCRIPTOR_POOL_CREATE_ALLOW_OVERALLOCATION_SETS_BIT_NV
+        //TODO: Also look at VK_DESCRIPTOR_POOL_CREATE_ALLOW_OVERALLOCATION_POOLS_BIT_NV
+        // Both extensions should allow us to use a single descriptor pool per frame for everything on nvidia. No on demand creation of additional sets and pools necessary! But does it have runtime costs?
         createInfo.maxSets = 256;
         createInfo.poolSizeCount = ARRAY_COUNT(poolSizes);
         createInfo.pPoolSizes = poolSizes;
