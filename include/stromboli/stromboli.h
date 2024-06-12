@@ -285,12 +285,20 @@ typedef struct StromboliGraphicsPipelineParameters {
     StromboliSpecializationConstant* constants;
     u32 constantsCount;
 
+    VkDescriptorSetLayout setLayotus[4]; // Optionally overwrite descriptor set layouts
+
     bool wireframe;
     bool depthTest;
     bool depthWrite;
     bool reverseZ;
     bool enableBlending;
 } StromboliGraphicsPipelineParameters;
+
+struct StromboliComputePipelineParameters {
+    String8 filename;
+
+    VkDescriptorSetLayout setLayotus[4]; // Optionally overwrite descriptor set layouts
+};
 
 struct StromboliIntersectionShaderSlot {
     const char* filename;
@@ -340,7 +348,7 @@ void stromboliSwapchainDestroy(StromboliContext* context, StromboliSwapchain* sw
 StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 width, u32 height, u32 subpassCount, StromboliSubpass* subpasses);
 void stromboliRenderpassDestroy(StromboliContext* context, StromboliRenderpass* renderPass);
 
-StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, String8 filename);
+StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, struct StromboliComputePipelineParameters* parameters);
 StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, struct StromboliGraphicsPipelineParameters* parameters);
 StromboliMultiFormatPipeline stromboliPipelineCreateMultiFormatGraphics(StromboliContext* context, struct StromboliGraphicsPipelineParameters* parameters);
 StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct StromboliRaytracingPipelineParameters* parameters);

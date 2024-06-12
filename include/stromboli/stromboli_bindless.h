@@ -14,5 +14,6 @@ void stromboliBindlessBeginFrame(u32 frameIndex);
 u32 stromboliBindlessBindBuffer(StromboliBuffer* buffer);
 u32 stromboliBindlessBindImage(StromboliContext* context, StromboliImage* image, VkImageLayout layout);
 void stromboliBindlessBindDescriptorSet(StromboliPipeline pipeline, VkCommandBuffer commandBuffer, u32 frameIndex);
+VkDescriptorSetLayout stromboliBindlessGetDescriptorSetLayout();
 
 #endif // STROMBOLI_BINDLESS_H

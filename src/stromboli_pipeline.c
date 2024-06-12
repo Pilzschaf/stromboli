@@ -320,6 +320,10 @@ static VkPipelineLayout createPipelineLayout(StromboliContext* context, ShaderIn
     VkPipelineLayout result = 0;
 
     for(u32 i = 0; i < 4; ++i) {
+        if(descriptorLayouts[i]) {
+            // Layout has been submitted from outside so skip this set and use existing layout
+            continue;
+        }
         if(shaderInfo->descriptorSets[i].descriptorMask) {
             descriptorLayouts[i] = createSetLayout(context, &shaderInfo->descriptorSets[i]);
             descriptorUpdateTemplates[i] = createDescriptorUpdateTemplate(context, &shaderInfo->descriptorSets[i], descriptorLayouts[i], i, bindPoint);
@@ -329,6 +333,7 @@ static VkPipelineLayout createPipelineLayout(StromboliContext* context, ShaderIn
             VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
             vkCreateDescriptorSetLayout(context->device, &createInfo, 0, &layout);
             descriptorLayouts[i] = layout;
+            descriptorUpdateTemplates[i] = (VkDescriptorUpdateTemplate)(1); // Special value indicating that we have to destroy this layout
         }
     }
 
@@ -342,12 +347,12 @@ static VkPipelineLayout createPipelineLayout(StromboliContext* context, ShaderIn
     return result;
 }
 
-StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, String8 filename) {
+StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, struct StromboliComputePipelineParameters* parameters) {
     MemoryArena* scratch = threadContextGetScratch(0);
     ArenaTempMemory temp = arenaBeginTemp(scratch);
 
     ShaderInfo shaderInfo = {0};
-    VkShaderModule shaderModule = createShaderModule(context, scratch, filename, &shaderInfo);
+    VkShaderModule shaderModule = createShaderModule(context, scratch, parameters->filename, &shaderInfo);
 
     VkPipelineShaderStageCreateInfo shaderStage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
     shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
@@ -355,7 +360,8 @@ StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, Stri
     shaderStage.pName = "main";
     shaderStage.pSpecializationInfo = 0;
 
-    VkDescriptorSetLayout descriptorLayouts[4] = {0};
+    VkDescriptorSetLayout descriptorLayouts[4];
+    MEMORY_COPY_ARRAY(descriptorLayouts, parameters->setLayotus);
     VkDescriptorUpdateTemplate descriptorUpdateTemplates[4] = {0};
     VkPipelineLayout pipelineLayout = createPipelineLayout(context, &shaderInfo, descriptorLayouts, descriptorUpdateTemplates, VK_PIPELINE_BIND_POINT_COMPUTE);
 
@@ -784,9 +790,12 @@ StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct Str
 
 void stromboliPipelineDestroy(StromboliContext* context, StromboliPipeline* pipeline) {
     for(u32 i = 0; i < ARRAY_COUNT(pipeline->descriptorLayouts); ++i) {
-        vkDestroyDescriptorSetLayout(context->device, pipeline->descriptorLayouts[i], 0);
+        // We assume here that we created the layout ourselves, when an update template exists for it!
         if(pipeline->updateTemplates[i]) {
-            vkDestroyDescriptorUpdateTemplateKHR(context->device, pipeline->updateTemplates[i], 0);
+            vkDestroyDescriptorSetLayout(context->device, pipeline->descriptorLayouts[i], 0);
+            if(pipeline->updateTemplates[i] != (VkDescriptorUpdateTemplate)1) {
+                vkDestroyDescriptorUpdateTemplateKHR(context->device, pipeline->updateTemplates[i], 0);
+            }
         }
     }
     vkDestroyPipelineLayout(context->device, pipeline->layout, 0);

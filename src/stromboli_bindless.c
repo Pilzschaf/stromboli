@@ -4,13 +4,18 @@ static VkDescriptorPool bindlessDescriptorPools[2];
 static VkDescriptorSet bindlessDescriptorSets[2];
 static VkDescriptorSetLayout bindlessLayout;
 
-//TODO: A single PipelineLayout would suffice?
-// Pipeline layout needs to know about push constants
-
 static u32 currentImageDescriptorIndex = 0;
 static u32 currentUniformBufferDescriptorIndex = 0;
 static u32 currentStorageBufferDescriptorIndex = 0;
 static u32 currentFrameIndex = 0;
+
+#ifndef BINDLESS_IMAGE_COUNT
+#define BINDLESS_IMAGE_COUNT 512
+#endif
+
+VkDescriptorSetLayout stromboliBindlessGetDescriptorSetLayout() {
+    return bindlessLayout;
+}
 
 void stromboliBindlessInit(StromboliContext* context) {
     //TODO: Overlap in shader by always setting binding to 0!
@@ -18,24 +23,24 @@ void stromboliBindlessInit(StromboliContext* context) {
     VkDescriptorSetLayoutBinding bindings[] = {
         //{.binding = 0, .descriptorCount = 512, .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .stageFlags = VK_SHADER_STAGE_ALL},
         //{.binding = 1, .descriptorCount = 512, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .stageFlags = VK_SHADER_STAGE_ALL},
-        {.binding = 2, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT}, //TODO: Must also create descriptor layout for this to work as we want all
+        {.binding = 2, .descriptorCount = BINDLESS_IMAGE_COUNT, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .stageFlags = VK_SHADER_STAGE_ALL}, //TODO: Must also create descriptor layout for this to work as we want all
     };
     VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
     //TODO: Also use flag VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT
-    //createInfo.flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_HOST_ONLY_POOL_BIT_EXT;
+    createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT | VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT_EXT;
     createInfo.bindingCount = ARRAY_COUNT(bindings);
     createInfo.pBindings = bindings;
     vkCreateDescriptorSetLayout(context->device, &createInfo, 0, &bindlessLayout);
 
     for(u32 i = 0; i < ARRAY_COUNT(bindlessDescriptorPools); ++i) {
         VkDescriptorPoolSize poolSizes[] = {
-            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, BINDLESS_IMAGE_COUNT},
             //{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 512},
             //{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 512},
         };
         // We require either Vulkan 1.2 or VK_EXT_descriptor_indexing extension
         VkDescriptorPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-        //createInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT_EXT;
+        createInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT_EXT;
         createInfo.maxSets = 1;
         createInfo.poolSizeCount = ARRAY_COUNT(poolSizes);
         createInfo.pPoolSizes = poolSizes;
@@ -71,7 +76,7 @@ u32 stromboliBindlessBindBuffer(StromboliBuffer* buffer) {
 u32 stromboliBindlessBindImage(StromboliContext* context, StromboliImage* image, VkImageLayout layout) {
     //TODO: Should batch updates
     u32 result = currentImageDescriptorIndex++;
-    ASSERT(result < 1);
+    ASSERT(result < BINDLESS_IMAGE_COUNT);
     VkDescriptorImageInfo imageInfo = {
         .imageLayout = layout,
         .imageView = image->view,
