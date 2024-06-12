@@ -11,8 +11,9 @@ void stromboliBindlessInit(StromboliContext* context);
 void stromboliBindlessShutdown(StromboliContext* context);
 void stromboliBindlessBeginFrame(u32 frameIndex);
 
-u32 stromboliBindlessBindBuffer(StromboliBuffer* buffer);
-u32 stromboliBindlessBindImage(StromboliContext* context, StromboliImage* image, VkImageLayout layout);
+u32 stromboliBindlessBindUniformBuffer(StromboliContext* context, StromboliBuffer* buffer);
+u32 stromboliBindlessBindStorageBuffer(StromboliContext* context, StromboliBuffer* buffer);
+u32 stromboliBindlessBindImage(StromboliContext* context, StromboliImage* image, VkImageLayout layout, VkSampler optionalSampler);
 void stromboliBindlessBindDescriptorSet(StromboliPipeline pipeline, VkCommandBuffer commandBuffer, u32 frameIndex);
 VkDescriptorSetLayout stromboliBindlessGetDescriptorSetLayout();
 

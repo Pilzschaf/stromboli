@@ -130,7 +130,10 @@ static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena*
             
                 // Larger binding numbers are not supported here
                 ASSERT(binding->binding < 32);
-                ASSERT(shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] == 0 || shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] == (VkDescriptorType)binding->descriptor_type);
+                
+                // Allow overlap
+                //ASSERT(shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] == 0 || shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] == (VkDescriptorType)binding->descriptor_type);
+                
                 shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] = (VkDescriptorType)binding->descriptor_type;
                 shaderInfo->descriptorSets[setIndex].descriptorCounts[binding->binding] = binding->count;
                 if(binding->count == 0) {

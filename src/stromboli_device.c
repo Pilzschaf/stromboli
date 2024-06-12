@@ -425,6 +425,9 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
             features12.runtimeDescriptorArray = parameters->runtimeDescriptorArray;
             features12.descriptorBindingVariableDescriptorCount = parameters->descriptorBindingVariableDescriptorCount;
             features12.descriptorBindingSampledImageUpdateAfterBind = parameters->descriptorBindingSampledImageUpdateAfterBind;
+            features12.descriptorBindingUniformBufferUpdateAfterBind = parameters->descriptorBindingUniformBufferUpdateAfterBind;
+            features12.descriptorBindingStorageBufferUpdateAfterBind = parameters->descriptorBindingStorageBufferUpdateAfterBind;
+            features12.descriptorBindingStorageImageUpdateAfterBind = parameters->descriptorBindingStorageImageUpdateAfterBind;
             features12.descriptorBindingPartiallyBound = parameters->descriptorBindingPartiallyBound;
             *pNextChain = &features12;
             pNextChain = &features12.pNext;

@@ -212,6 +212,9 @@ typedef struct StromboliInitializationParameters {
     bool runtimeDescriptorArray;
     bool descriptorBindingVariableDescriptorCount;
     bool descriptorBindingSampledImageUpdateAfterBind;
+    bool descriptorBindingUniformBufferUpdateAfterBind;
+    bool descriptorBindingStorageBufferUpdateAfterBind;
+    bool descriptorBindingStorageImageUpdateAfterBind;
     bool descriptorBindingPartiallyBound;
 } StromboliInitializationParameters;
 
