@@ -262,6 +262,9 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
     if(parameters->dynamicRendering && context->apiVersion < VK_API_VERSION_1_3) {
         requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME;
     }
+    if(parameters->dynamicRenderingUnusedAttachments && context->apiVersion < VK_API_VERSION_1_3) {
+        requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME;
+    }
     if(parameters->synchronization2) { //Promoted to VK_API_VERSION_1_3
         requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME;
     }
@@ -417,7 +420,8 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
         VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR};
         VkPhysicalDeviceAccelerationStructureFeaturesKHR asFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
         VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR};
-        
+        VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynamicRenderingUnusedAttachmentsFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT};
+
         if(context->apiVersion >= VK_API_VERSION_1_2) {
             features12.bufferDeviceAddress = parameters->bufferDeviceAddress;
             features12.scalarBlockLayout = parameters->scalarBlockLayout;
@@ -462,6 +466,12 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
             rayTracingFeatures.rayTracingPipeline = true;
             *pNextChain = &rayTracingFeatures;
             pNextChain = &rayTracingFeatures.pNext;
+        }
+
+        if(parameters->dynamicRenderingUnusedAttachments) {
+            dynamicRenderingUnusedAttachmentsFeatures.dynamicRenderingUnusedAttachments = true;
+            *pNextChain = &dynamicRenderingUnusedAttachmentsFeatures;
+            pNextChain = &dynamicRenderingUnusedAttachmentsFeatures.pNext;
         }
 
         if (vkCreateDevice(context->physicalDevice, &createInfo, 0, &context->device)) {

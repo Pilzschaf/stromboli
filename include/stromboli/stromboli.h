@@ -203,6 +203,7 @@ typedef struct StromboliInitializationParameters {
     bool bufferDeviceAddress;
     bool scalarBlockLayout;
     bool dynamicRendering;
+    bool dynamicRenderingUnusedAttachments;
     bool synchronization2;
     bool maintenance4;
     bool rayQuery;

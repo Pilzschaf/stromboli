@@ -276,7 +276,7 @@ inline static bool presentImage(StromboliContext* context, StromboliSwapchain* s
 	return true;
 }
 
-static inline void vulkanCmdCopyImageToSwapchain(VkCommandBuffer commandBuffer, StromboliImage* source, VkFormat sourceFormat, StromboliSwapchain* swapchain, u32 imageIndex) {
+static inline void stromboliCmdCopyImageToSwapchain(VkCommandBuffer commandBuffer, StromboliImage* source, VkFormat sourceFormat, StromboliSwapchain* swapchain, u32 imageIndex) {
 	if (swapchain->format == sourceFormat) {
 		// Formats match so do a simple blit
 		VkImageCopy region = { 0 };
@@ -319,7 +319,7 @@ static inline void vulkanCmdCopyImageToSwapchain(VkCommandBuffer commandBuffer, 
 	}
 }
 
-static inline void vulkanCmdCopyWholeImage(VkCommandBuffer commandBuffer, StromboliImage* source, StromboliImage* target) {
+static inline void stromboliCmdCopyWholeImage(VkCommandBuffer commandBuffer, StromboliImage* source, StromboliImage* target) {
 	ASSERT(source->width == target->width);
 	ASSERT(source->height == target->height);
 	ASSERT(source->depth == target->depth);
@@ -360,12 +360,20 @@ inline static bool acquireImage(StromboliContext* context, StromboliSwapchain* s
 	return true;
 }
 
-static inline void vulkanCmdTraceRays(VkCommandBuffer commandBuffer, StromboliPipeline* pipeline, u32 width, u32 height) {
+static inline void stromboliCmdTraceRays(VkCommandBuffer commandBuffer, StromboliPipeline* pipeline, u32 width, u32 height) {
 	ASSERT(pipeline->type == STROMBOLI_PIPELINE_TYPE_RAYTRACING);
 	vkCmdTraceRaysKHR(commandBuffer, &pipeline->raytracing.sbtRayGenRegion, &pipeline->raytracing.sbtMissRegion, &pipeline->raytracing.sbtHitRegion, &pipeline->raytracing.sbtCallableRegion, width, height, 1);
 }
 
-inline static VkDescriptorSet createDescriptorSet(StromboliContext* context, StromboliPipeline* pipeline, VkDescriptorPool descriptorPool, u32 setIndex) {
+static inline void stromboliCmdDispatch(VkCommandBuffer commandBuffer, StromboliPipeline* pipeline, u32 width, u32 height) {
+	ASSERT(pipeline->type == STROMBOLI_PIPELINE_TYPE_COMPUTE);
+	u32 workgroupWidth = pipeline->compute.workgroupWidth;
+	u32 workgroupHeight = pipeline->compute.workgroupHeight;
+	ASSERT(workgroupWidth > 0 && workgroupHeight > 0);
+	vkCmdDispatch(commandBuffer, (width + (workgroupWidth-1)) / workgroupWidth, (height + (workgroupHeight-1)) / workgroupHeight, 1);
+}
+
+static inline VkDescriptorSet createDescriptorSet(StromboliContext* context, StromboliPipeline* pipeline, VkDescriptorPool descriptorPool, u32 setIndex) {
 	VkDescriptorSet result = {0};
 	VkDescriptorSetAllocateInfo allocateInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
 	allocateInfo.descriptorPool = descriptorPool;
