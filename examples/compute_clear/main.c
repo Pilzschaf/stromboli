@@ -57,7 +57,7 @@ void createResources(StromboliContext* context) {
         .fragmentShaderFilename = STR8_LITERAL("examples/compute_clear/triangle.frag.spv"),
         .renderPass = renderPass.renderPass,
     });
-    computePipeline = stromboliPipelineCreateCompute(context, STR8_LITERAL("examples/compute_clear/clear.comp.spv"));
+    computePipeline = stromboliPipelineCreateCompute(context, &(struct StromboliComputePipelineParameters){ .filename=STR8_LITERAL("examples/compute_clear/clear.comp.spv")});
 
     graphicsSection = createRenderSection(context, &context->graphicsQueues[0]);
     computeSection = createRenderSection(context, &context->computeQueues[0]);
@@ -200,7 +200,6 @@ int main(int argc, char** argv) {
         .synchronization2 = true,
         .computeQueueRequestCount = 1,
         .descriptorUpdateTemplate = true,
-        .vulkanApiVersion = VK_API_VERSION_1_0,
     });
     if(STROMBOLI_ERROR(error)) {
         ASSERT(false);

@@ -34,7 +34,7 @@ static u32 findMemoryType(StromboliContext* context, u32 typeFilter, VkMemoryPro
 	return UINT32_MAX;
 }
 
-void uploadDataToBuffer(StromboliContext* context, StromboliBuffer* buffer, void* data, size_t size, StromboliUploadContext* uploadContext) {
+void stromboliUploadDataToBuffer(StromboliContext* context, StromboliBuffer* buffer, void* data, size_t size, StromboliUploadContext* uploadContext) {
 	//void* mapping = 0;
 	ASSERT(buffer->mapped);
 	//vkMapMemory(context->device, buffer->memory, 0, size, 0, &mapping);
@@ -245,7 +245,7 @@ void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image
 	}
 }
 
-void destroyBuffer(StromboliContext* context, StromboliBuffer* buffer) {
+void stromboliDestroyBuffer(StromboliContext* context, StromboliBuffer* buffer) {
 	if(buffer->mapped && !buffer->memory) {
 		vmaUnmapMemory(context->vmaAllocator, buffer->allocation);
 		// Unmapping should not be necessary?
@@ -324,7 +324,7 @@ StromboliAccelerationStructure createAccelerationStructure(StromboliContext* con
 
 	//TODO: Flush so we can destroy the buffer. This would not be required if we would use the scratch buffer of the context
 	flushUploadContext(context, uploadContext);
-    destroyBuffer(context, &scratchBuffer);
+    stromboliDestroyBuffer(context, &scratchBuffer);
 
 	if(compact) {
 		ensureUploadContextIsRecording(context, uploadContext);
@@ -368,7 +368,7 @@ StromboliAccelerationStructure createAccelerationStructure(StromboliContext* con
 		flushUploadContext(context, uploadContext);
 		vkDestroyAccelerationStructureKHR(context->device, result.accelerationStructure, 0);
 		result.accelerationStructure = compactedAccelerationStructure;
-		destroyBuffer(context, &result.accelerationStructureBuffer);
+		stromboliDestroyBuffer(context, &result.accelerationStructureBuffer);
 		result.accelerationStructureBuffer = compactedAccelerationStructureBuffer;
 	}
 
@@ -383,7 +383,7 @@ void destroyAccelerationStructure(StromboliContext* context, StromboliAccelerati
 	if(vkDestroyAccelerationStructureKHR) {
 		vkDestroyAccelerationStructureKHR(context->device, accelerationStructure->accelerationStructure, 0);
 	}
-	destroyBuffer(context, &accelerationStructure->accelerationStructureBuffer);
+	stromboliDestroyBuffer(context, &accelerationStructure->accelerationStructureBuffer);
 }
 
 StromboliUploadContext createUploadContext(StromboliContext* context, StromboliQueue* queue, StromboliBuffer* scratch) {
@@ -446,8 +446,8 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 
 		vkBindBufferMemory(context->device, result.buffer, result.memory, 0);
 
-		// We have to check all 3 as we are only checkin user requested and not the property of the returned memory
-		if(memoryProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT || memoryProperties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT || memoryProperties & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) {
+		// We have to check all 3 as we are only checking user requested and not the property of the returned memory
+		if((memoryProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)) {
 			vkMapMemory(context->device, result.memory, 0, VK_WHOLE_SIZE, 0, &result.mapped);
 		} else {
 			result.mapped = 0;
@@ -470,7 +470,7 @@ void destroyUploadContext(StromboliContext* context, StromboliUploadContext* upl
 
 	// Destroy buffer if it is owned by the upload context
 	if(uploadContext->flags & STROMBOLI_UPLOAD_CONTEXT_OWNS_BUFFER && uploadContext->scratch) {
-		destroyBuffer(context, uploadContext->scratch);
+		stromboliDestroyBuffer(context, uploadContext->scratch);
 	}
 }
 
@@ -618,7 +618,7 @@ void destroyFramebuffer(StromboliContext* context, StromboliFramebuffer* framebu
 	}
 }
 
-void uploadDataToImageSubregion(StromboliContext* context, StromboliImage* image, void* data, u64 size, u32 width, u32 height, u32 depth, u32 mipLevel, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext) {
+void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliImage* image, void* data, u64 size, u32 width, u32 height, u32 depth, u32 mipLevel, u32 layer, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext) {
 	//TRACY_ZONE_HELPER(uploadDataToImageSubregion);
 
 	ASSERT((size % width * height * depth) == 0);
@@ -642,6 +642,7 @@ void uploadDataToImageSubregion(StromboliContext* context, StromboliImage* image
 	region.bufferOffset = scratchOffset;
 	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	region.imageSubresource.layerCount = 1;
+	region.imageSubresource.baseArrayLayer = layer;
 	region.imageSubresource.mipLevel = mipLevel;
 	region.imageExtent = (VkExtent3D){width, height, depth};
 	vkCmdCopyBufferToImage(commandBuffer, uploadContext->scratch->buffer, image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
