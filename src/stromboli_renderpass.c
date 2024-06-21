@@ -1,8 +1,8 @@
-#include <stromboli.h>
+#include <stromboli/stromboli.h>
 #include <grounded/memory/grounded_arena.h>
 #include <grounded/threading/grounded_threading.h>
 
-StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 subpassCount, StromboliSubpass* subpasses) {
+StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 width, u32 height, u32 subpassCount, StromboliSubpass* subpasses) {
     MemoryArena* scratch = threadContextGetScratch(0);
     ArenaTempMemory tempMemory = arenaBeginTemp(scratch);
 
@@ -51,9 +51,7 @@ StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 sub
     VkAttachmentReference* references = ARENA_PUSH_ARRAY(scratch, maxNumReferences, VkAttachmentReference);
     u32 currentAttachmentIndex = 0;
     VkAttachmentDescription* attachments = ARENA_PUSH_ARRAY(scratch, maxNumAttachments, VkAttachmentDescription);
-    StromboliFramebuffer** attachmentViews = ARENA_PUSH_ARRAY(scratch, maxNumAttachments, StromboliFramebuffer*);
-    u32 width = 0; // All attachments must have the same size
-    u32 height = 0;
+    VkImageView* attachmentViews = ARENA_PUSH_ARRAY(scratch, maxNumAttachments, VkImageView);
 
     // Create attachments, references and subpass descriptions
     VkSubpassDescription* subpassDescriptions = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, subpassCount, VkSubpassDescription);
@@ -68,14 +66,10 @@ StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 sub
             if(subpasses[i].outputAttachments[j].__assignedSlot == -1) {
                 subpasses[i].outputAttachments[j].__assignedSlot = currentAttachmentIndex;
                 struct StromboliAttachment a = subpasses[i].outputAttachments[j];
-                ASSERT(width == 0 || width == a.framebuffer->images[0].width);
-                ASSERT(height == 0 || height == a.framebuffer->images[0].height);
-                width = a.framebuffer->images[0].width;
-                height = a.framebuffer->images[0].height;
-                attachmentViews[currentAttachmentIndex] = a.framebuffer;
+                attachmentViews[currentAttachmentIndex] = a.imageView;
                 attachments[currentAttachmentIndex] = (VkAttachmentDescription){0};
-                attachments[currentAttachmentIndex].format = a.framebuffer->format;
-                attachments[currentAttachmentIndex].samples = a.framebuffer->sampleCount;
+                attachments[currentAttachmentIndex].format = a.format;
+                attachments[currentAttachmentIndex].samples = a.sampleCount;
                 attachments[currentAttachmentIndex].loadOp = a.loadOp;
                 attachments[currentAttachmentIndex].storeOp = a.storeOp;
                 attachments[currentAttachmentIndex].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -99,7 +93,70 @@ StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 sub
             references[currentReferenceIndex].attachment = subpasses[i].outputAttachments[j].__assignedSlot;
             ++currentReferenceIndex;
         }
-
+        // Depth
+        if(subpasses[i].depthAttachment) {
+            subpassDescriptions[i].pDepthStencilAttachment = &references[currentReferenceIndex];
+            if(subpasses[i].depthAttachment->__assignedSlot == -1) {
+                subpasses[i].depthAttachment->__assignedSlot = currentAttachmentIndex;
+                struct StromboliAttachment a = *subpasses[i].depthAttachment;
+                attachmentViews[currentAttachmentIndex] = subpasses[i].depthAttachment->imageView;
+                attachments[currentAttachmentIndex] = (VkAttachmentDescription){0};
+                attachments[currentAttachmentIndex].format = a.format;
+                attachments[currentAttachmentIndex].samples = a.sampleCount ? a.sampleCount : VK_SAMPLE_COUNT_1_BIT;
+                attachments[currentAttachmentIndex].loadOp = a.loadOp;
+                attachments[currentAttachmentIndex].storeOp = a.storeOp;
+                attachments[currentAttachmentIndex].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                attachments[currentAttachmentIndex].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                attachments[currentAttachmentIndex].initialLayout = a.initialLayout;
+                attachments[currentAttachmentIndex].finalLayout = a.finalLayout;
+                if(attachments[currentAttachmentIndex].loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR) {
+                    clearColors[currentClearColorIndex].depthStencil = subpasses[i].depthAttachment->clearColor.depthStencil;
+                    ++currentClearColorIndex;
+                    ASSERT(currentClearColorIndex <= maxNumClearColors);
+                }
+                currentAttachmentIndex++;
+            } else {
+                ASSERT(false);
+            }
+            if(subpasses[i].depthAttachment->usageLayout) {
+                references[currentReferenceIndex].layout = subpasses[i].depthAttachment->usageLayout;
+            } else {
+                references[currentReferenceIndex].layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            }
+            references[currentReferenceIndex].attachment = subpasses[i].depthAttachment->__assignedSlot;
+            ++currentReferenceIndex;
+        }
+        // Inputs
+        subpassDescriptions[i].inputAttachmentCount = subpasses[i].inputAttachmentCount;
+        subpassDescriptions[i].pInputAttachments = &references[currentReferenceIndex];
+        for(u32 j = 0; j < subpasses[i].inputAttachmentCount; ++j) {
+            if(subpasses[i].inputAttachments[j].__assignedSlot == -1) {
+                subpasses[i].inputAttachments[j].__assignedSlot = currentAttachmentIndex;
+                struct StromboliAttachment a = subpasses[i].inputAttachments[j];
+                attachmentViews[currentAttachmentIndex] = a.imageView;
+                attachments[currentAttachmentIndex] = (VkAttachmentDescription){0};
+                attachments[currentAttachmentIndex].format = a.format;
+                attachments[currentAttachmentIndex].samples = a.sampleCount ? a.sampleCount : VK_SAMPLE_COUNT_1_BIT;
+                attachments[currentAttachmentIndex].loadOp = a.loadOp;
+                attachments[currentAttachmentIndex].storeOp = a.storeOp;
+                attachments[currentAttachmentIndex].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                attachments[currentAttachmentIndex].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                attachments[currentAttachmentIndex].initialLayout = a.initialLayout;
+                attachments[currentAttachmentIndex].finalLayout = a.finalLayout;
+                // Clear not allowed for input attachments
+                ASSERT(attachments[currentAttachmentIndex].loadOp != VK_ATTACHMENT_LOAD_OP_CLEAR);
+                currentAttachmentIndex++;
+            } else {
+                // The only one that may reuse attachments from this subpass
+            }
+            if(subpasses[i].inputAttachments[j].usageLayout) {
+                references[currentReferenceIndex].layout = subpasses[i].inputAttachments[j].usageLayout;
+            } else {
+                references[currentReferenceIndex].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            }
+            references[currentReferenceIndex].attachment = subpasses[i].inputAttachments[j].__assignedSlot;
+            ++currentReferenceIndex;
+        }
     }
 
     ASSERT(currentReferenceIndex == maxNumReferences);
@@ -117,12 +174,16 @@ StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 sub
     result.numClearColors = currentClearColorIndex;
 
     // Framebuffer
-    u32 numFramebuffers = MAX_SWAPCHAIN_IMAGES;
+    u32 numFramebuffers = subpasses->swapchainOutput ? subpasses->swapchainOutput->numImages : 1;
     VkImageView* framebufferViews = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, currentAttachmentIndex, VkImageView);
     for(u32 i = 0; i < numFramebuffers; ++i) {
         for(u32 j = 0; j < currentAttachmentIndex; ++j) {
             // Apply all image views
-            framebufferViews[j] = attachmentViews[j]->images[i].view;
+            framebufferViews[j] = attachmentViews[j];
+            if(!framebufferViews[j]) {
+                ASSERT(subpasses->swapchainOutput);
+                framebufferViews[j] = subpasses->swapchainOutput->imageViews[i];
+            }
         }
         
         VkFramebufferCreateInfo createInfo = {VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
@@ -141,5 +202,11 @@ StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 sub
 }
 
 void stromboliRenderpassDestroy(StromboliContext* context, StromboliRenderpass* renderPass) {
-
+    free(renderPass->clearColors);
+    for(u32 i = 0; i < MAX_SWAPCHAIN_IMAGES; ++i) {
+        if(renderPass->framebuffers[i]) {
+            vkDestroyFramebuffer(context->device, renderPass->framebuffers[i], 0);
+        }
+    }
+    vkDestroyRenderPass(context->device, renderPass->renderPass, 0);
 }

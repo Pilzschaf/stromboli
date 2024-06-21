@@ -68,6 +68,17 @@ project "ComputeClear"
         "GroundedStatic",
     }
 
+project "Triangle"
+    files
+    {
+        "examples/triangle/main.c",
+    }
+    links
+    {
+        "StromboliStatic",
+        "GroundedStatic",
+    }
+
 project "GroundedStatic"
     kind "StaticLib"
     targetdir "bin/static/%{cfg.buildcfg:lower()}"
@@ -111,6 +122,7 @@ project "StromboliStatic"
         "src/stromboli_device.c",
         "src/stromboli_swapchain.c",
         "src/stromboli_pipeline.c",
+        "src/stromboli_renderpass.c",
         "libs/SPIRV-Reflect/spirv_reflect.c",
     }
     links
@@ -125,6 +137,9 @@ project "StromboliDynamic"
     {
         "src/stromboli_device.c",
         "src/stromboli_swapchain.c",
+        "src/stromboli_pipeline.c",
+        "src/stromboli_renderpass.c",
+        "libs/SPIRV-Reflect/spirv_reflect.c",
     }
     links
     {

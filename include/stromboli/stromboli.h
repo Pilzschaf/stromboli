@@ -151,14 +151,11 @@ typedef struct StromboliInitializationParameters {
     bool descriptorBindingPartiallyBound;
 } StromboliInitializationParameters;
 
-typedef struct StromboliFramebuffer {
-    //StromboliImage images[MAX_FRAMES_IN_FLIGHT];
-    VkFormat format;
-    VkImageUsageFlags usage;
-    VkSampleCountFlags sampleCount;
-} VulkanFramebuffer;
-
 struct StromboliAttachment {
+    VkImageView imageView;
+    VkFormat format;
+    VkSampleCountFlags sampleCount;
+
     VkAttachmentLoadOp loadOp;
     VkAttachmentStoreOp storeOp;
     VkImageLayout initialLayout;
@@ -226,7 +223,7 @@ StromboliSwapchain stromboliSwapchainCreate(StromboliContext* context, VkSurface
 bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height);
 void stromboliSwapchainDestroy(StromboliContext* context, StromboliSwapchain* swapchain);
 
-StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 subpassCount, StromboliSubpass* subpasses);
+StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 width, u32 height, u32 subpassCount, StromboliSubpass* subpasses);
 void stromboliRenderpassDestroy(StromboliContext* context, StromboliRenderpass* renderPass);
 
 StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, String8 filename);
