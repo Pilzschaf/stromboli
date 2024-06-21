@@ -69,6 +69,17 @@ project "ComputeClear"
         "GroundedStatic",
     }
 
+project "Triangle"
+    files
+    {
+        "examples/triangle/main.c",
+    }
+    links
+    {
+        "StromboliStatic",
+        "GroundedStatic",
+    }
+
 project "GroundedStatic"
     kind "StaticLib"
     targetdir "bin/static/%{cfg.buildcfg:lower()}"

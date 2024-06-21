@@ -557,6 +557,7 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
         createInfo.stageCount = ARRAY_COUNT(shaderStages);
         createInfo.pStages = shaderStages;
         createInfo.pVertexInputState = &combinedInfo.vertexInputCreateInfo;
+        createInfo.pInputAssemblyState = &inputAssembly;
         createInfo.pTessellationState = 0;
         createInfo.pInputAssemblyState = &inputAssembly;
         createInfo.pViewportState = &viewportState;
