@@ -67,6 +67,8 @@ project "ComputeClear"
     {
         "StromboliStatic",
         "GroundedStatic",
+        "vma",
+        "stdc++",
     }
 
 project "Triangle"
@@ -78,6 +80,8 @@ project "Triangle"
     {
         "StromboliStatic",
         "GroundedStatic",
+        "vma",
+        "stdc++",
     }
 
 project "GroundedStatic"
@@ -130,6 +134,7 @@ project "StromboliStatic"
     links
     {
         "GroundedStatic",
+        "vma",
     }
 
 project "StromboliDynamic"
@@ -148,3 +153,17 @@ project "StromboliDynamic"
     {
         "GroundedDynamic",
     }
+
+project "vma"
+    kind "StaticLib"
+    language "C++"
+    cppdialect "C++17"
+    files
+    {
+        "src/vma.cpp",
+    }
+    filter "system:linux"
+        buildoptions
+        {
+            "-Wno-error",
+        }
