@@ -161,6 +161,11 @@ project "StromboliDynamic"
     {
         "GroundedDynamic",
     }
+    filter "system:windows"
+        links
+        {
+            "vma",
+        }
 
 project "vma"
     kind "StaticLib"
