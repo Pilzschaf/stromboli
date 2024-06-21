@@ -4,13 +4,16 @@
 
 #include <stromboli/stromboli.h>
 
+#include <stdio.h>
+
 StromboliSwapchain swapchain;
 StromboliPipeline graphicsPipeline;
 StromboliRenderpass renderPass;
 
-VkCommandPool commandPool;
-VkCommandBuffer commandBuffer;
 VkSemaphore imageAcquireSemaphore;
+VkSemaphore imageReleaseSemaphore;
+
+StromboliRenderSection mainPass;
 
 void resizeApplication(StromboliContext* context, u32 width, u32 height) {
     vkDeviceWaitIdle(context->device);
@@ -40,78 +43,44 @@ void createResources(StromboliContext* context) {
         .renderPass = renderPass.renderPass,
     });
     {
-        VkCommandPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
-        createInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-        createInfo.queueFamilyIndex = context->graphicsQueues[0].familyIndex;
-        vkCreateCommandPool(context->device, &createInfo, 0, &commandPool);
-
-        VkCommandBufferAllocateInfo allocateInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
-        allocateInfo.commandBufferCount = 1;
-        allocateInfo.commandPool = commandPool;
-        allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        vkAllocateCommandBuffers(context->device, &allocateInfo, &commandBuffer);
-    }
-    {
         VkSemaphoreCreateInfo createInfo = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
         vkCreateSemaphore(context->device, &createInfo, 0, &imageAcquireSemaphore);
+        vkCreateSemaphore(context->device, &createInfo, 0, &imageReleaseSemaphore);
     }
+    mainPass = createRenderSection(context, &context->graphicsQueues[0]);
 }
 
 void destroyResources(StromboliContext* context) {
     stromboliRenderpassDestroy(context, &renderPass);
     stromboliPipelineDestroy(context, &graphicsPipeline);
-    vkDestroyCommandPool(context->device, commandPool, 0);
+    destroyRenderSection(context, &mainPass);
     vkDestroySemaphore(context->device, imageAcquireSemaphore, 0);
+    vkDestroySemaphore(context->device, imageReleaseSemaphore, 0);
 }
 
 void renderFrame(StromboliContext* context) {
+    vkWaitForFences(context->device, 1, &mainPass.fences[0], true, UINT64_MAX);
     u32 imageIndex = 0;
     VkResult acquireResult = vkAcquireNextImageKHR(context->device, swapchain.swapchain, UINT64_MAX, imageAcquireSemaphore, 0, &imageIndex);
     ASSERT(acquireResult == VK_SUCCESS);
-    
-    vkResetCommandPool(context->device, commandPool, 0);
-    VkCommandBufferBeginInfo beginInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    vkBeginCommandBuffer(commandBuffer, &beginInfo);
-        VkRenderPassBeginInfo renderBeginInfo = {
-            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-            .clearValueCount = renderPass.numClearColors,
-            .pClearValues = renderPass.clearColors,
-            .framebuffer = renderPass.framebuffers[imageIndex],
-            .renderArea = (VkRect2D) {.extent = {swapchain.width, swapchain.height}, .offset = {0}},
-            .renderPass = renderPass.renderPass,
-        };
-        vkCmdBeginRenderPass(commandBuffer, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+    VkCommandBuffer commandBuffer = beginRenderSection(context, &mainPass, 0, "Main pass");
+        stromboliCmdBeginRenderpass(commandBuffer, &renderPass, swapchain.width, swapchain.height, imageIndex);
+        stromboliCmdSetViewportAndScissor(commandBuffer, swapchain.width, swapchain.height);
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline.pipeline);
-        VkViewport viewport = {
-            .x = 0, .y = 0, .width = swapchain.width, .height = swapchain.height, .minDepth = 0.0f, .maxDepth = 1.0f,
-        };
-        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-        VkRect2D scissor = {
-            .extent = {swapchain.width, swapchain.height},
-            .offset = {0},
-        };
-        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
         vkCmdDraw(commandBuffer, 3, 1, 0, 0);
         vkCmdEndRenderPass(commandBuffer);
-    vkEndCommandBuffer(commandBuffer);
-
-    VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
-    submitInfo.pWaitSemaphores = &imageAcquireSemaphore;
-    submitInfo.waitSemaphoreCount = 1;
-    VkPipelineStageFlags waitMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-    submitInfo.pWaitDstStageMask = &waitMask;
-    vkQueueSubmit(context->graphicsQueues[0].queue, 1, &submitInfo, 0);
-
-    vkDeviceWaitIdle(context->device);
+    VkPipelineStageFlags waitMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    endRenderSection(context, &mainPass, 0, 1, &imageAcquireSemaphore, &waitMask, 1, &imageReleaseSemaphore);
+    float duration = mainPass.durationOfLastCompletedInvocation;
+    printf("Duration: %fms\n", duration);
 
     VkPresentInfoKHR presentInfo = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     presentInfo.pImageIndices = &imageIndex;
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = &swapchain.swapchain;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &imageReleaseSemaphore;
     VkResult presentResult = vkQueuePresentKHR(context->graphicsQueues[0].queue, &presentInfo);
     ASSERT(presentResult == VK_SUCCESS);
 }
