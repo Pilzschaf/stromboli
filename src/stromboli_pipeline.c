@@ -9,13 +9,14 @@ struct ShaderDescriptorSetInfo {
     u32 descriptorCounts[32];
     VkShaderStageFlagBits stages[32];
     u32 descriptorMask;
-    //VkDescriptorBindingFlags flags[32];
+    VkDescriptorBindingFlags flags[32];
 };
 
 typedef struct ShaderInfo {
     VkShaderStageFlagBits stage;
     VkPushConstantRange range;
     struct ShaderDescriptorSetInfo descriptorSets[4];
+    //StromboliSpecializationConstant constants[4]; //TODO: Current maximum of 4
 
     // Options that are only filled out depending on shader type
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo;
@@ -129,10 +130,18 @@ static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena*
             
                 // Larger binding numbers are not supported here
                 ASSERT(binding->binding < 32);
-                ASSERT(shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] == 0 || shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] == (VkDescriptorType)binding->descriptor_type);
+                
+                // Allow overlap
+                //ASSERT(shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] == 0 || shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] == (VkDescriptorType)binding->descriptor_type);
+                
                 shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] = (VkDescriptorType)binding->descriptor_type;
                 shaderInfo->descriptorSets[setIndex].descriptorCounts[binding->binding] = binding->count;
-                ASSERT(binding->count > 0);
+                if(binding->count == 0) {
+                    shaderInfo->descriptorSets[setIndex].flags[binding->binding] |= VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
+                    //shaderInfo->descriptorSets[setIndex].flags[binding->binding] |= VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+                    shaderInfo->descriptorSets[setIndex].flags[binding->binding] |= VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+                    shaderInfo->descriptorSets[setIndex].descriptorCounts[binding->binding] = 32768;
+                }
 
                 // Binding name is the instance name and not the type name!
                 if(startsWith(binding->name, "dynamic")) {
@@ -163,6 +172,21 @@ static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena*
         }
     }
 
+    /*{ // Specialization constants
+        u32 numSpecializationConstants = 0;
+        error = spvReflectEnumerateSpecializationConstants(&reflectModule, &numSpecializationConstants, 0);
+        ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
+        SpvReflectSpecializationConstant* specializationConstants = ARENA_PUSH_ARRAY_NO_CLEAR(arena, numSpecializationConstants, SpvReflectSpecializationConstant);
+        error = spvReflectEnumerateSpecializationConstants(&reflectModule, &numSpecializationConstants, &specializationConstants);
+        ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
+        for(u32 i = 0; i < numSpecializationConstants; ++i) {
+            String8 name = str8FromCstr(specializationConstants[i].name);
+            u32 index = specializationConstants[i].constant_id;
+            ASSERT(index < ARRAY_COUNT(shaderInfo->constants));
+            shaderInfo->constants[index].name = str8Copy(arena, name);
+        }
+    }*/
+
     spvReflectDestroyShaderModule(&reflectModule);
     STROMBOLI_NAME_OBJECT_EXPLICIT(context, result, VK_OBJECT_TYPE_SHADER_MODULE, str8GetCstr(arena, filename));
 
@@ -170,8 +194,15 @@ static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena*
 }
 
 static VkDescriptorSetLayout createSetLayout(StromboliContext* context, struct ShaderDescriptorSetInfo* shaderDescriptorInfo) {
+    MemoryArena* scratch = threadContextGetScratch(0);
+    ArenaTempMemory temp = arenaBeginTemp(scratch);
+
     u32 currentBindingIndex = 0;
     VkDescriptorSetLayoutBinding bindings[32]; // 32 is worst case actually because of our 32 binding limitation from above
+
+    VkDescriptorSetLayoutBindingFlagsCreateInfo layoutFlags = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO};
+    layoutFlags.pBindingFlags = ARENA_PUSH_ARRAY(scratch, 32, VkDescriptorBindingFlags);
+    bool containsLayoutFlags = false;
 
     for(u32 i = 0; i < 32; ++i) {
         if(shaderDescriptorInfo->descriptorMask & ((u32)1 << i)) {
@@ -181,6 +212,10 @@ static VkDescriptorSetLayout createSetLayout(StromboliContext* context, struct S
             binding->descriptorType = shaderDescriptorInfo->descriptorTypes[i];
             binding->descriptorCount = shaderDescriptorInfo->descriptorCounts[i];
             binding->stageFlags = shaderDescriptorInfo->stages[i];
+            if(shaderDescriptorInfo->flags[i]) {
+                ((VkDescriptorBindingFlags*)layoutFlags.pBindingFlags)[i] = shaderDescriptorInfo->flags[i];
+                containsLayoutFlags = true;                
+            }
             ++currentBindingIndex;
         }
     }
@@ -189,10 +224,17 @@ static VkDescriptorSetLayout createSetLayout(StromboliContext* context, struct S
     createInfo.flags = 0; // VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR
     createInfo.bindingCount = currentBindingIndex;
     createInfo.pBindings = bindings;
+    if(containsLayoutFlags) {
+        layoutFlags.bindingCount = currentBindingIndex;
+        createInfo.pNext = &layoutFlags;
+        //TODO: Check which flags are actually set
+        //createInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    }
 
     VkDescriptorSetLayout result = 0;
     vkCreateDescriptorSetLayout(context->device, &createInfo, 0, &result);
 
+    arenaEndTemp(temp);
     return result;
 }
 
@@ -219,9 +261,7 @@ ShaderInfo combineShaderInfos(u32 shaderInfoCount, ShaderInfo* shaderInfos) {
                         
                         result.descriptorSets[setIndex].descriptorTypes[j] = info->descriptorSets[setIndex].descriptorTypes[j];
                         result.descriptorSets[setIndex].descriptorCounts[j] = info->descriptorSets[setIndex].descriptorCounts[j];
-                        ASSERT(false);
-                        //TODO: result.descriptorSets[setIndex].flags[j] |= info->descriptorSets[setIndex].flags[j];
-
+                        result.descriptorSets[setIndex].flags[j] |= info->descriptorSets[setIndex].flags[j];
                         result.descriptorSets[setIndex].stages[j] |= info->stage;
                         result.descriptorSets[setIndex].descriptorMask |= 1 << j;
                     }
@@ -283,6 +323,10 @@ static VkPipelineLayout createPipelineLayout(StromboliContext* context, ShaderIn
     VkPipelineLayout result = 0;
 
     for(u32 i = 0; i < 4; ++i) {
+        if(descriptorLayouts[i]) {
+            // Layout has been submitted from outside so skip this set and use existing layout
+            continue;
+        }
         if(shaderInfo->descriptorSets[i].descriptorMask) {
             descriptorLayouts[i] = createSetLayout(context, &shaderInfo->descriptorSets[i]);
             descriptorUpdateTemplates[i] = createDescriptorUpdateTemplate(context, &shaderInfo->descriptorSets[i], descriptorLayouts[i], i, bindPoint);
@@ -292,6 +336,7 @@ static VkPipelineLayout createPipelineLayout(StromboliContext* context, ShaderIn
             VkDescriptorSetLayoutCreateInfo createInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
             vkCreateDescriptorSetLayout(context->device, &createInfo, 0, &layout);
             descriptorLayouts[i] = layout;
+            descriptorUpdateTemplates[i] = (VkDescriptorUpdateTemplate)(1); // Special value indicating that we have to destroy this layout
         }
     }
 
@@ -305,12 +350,12 @@ static VkPipelineLayout createPipelineLayout(StromboliContext* context, ShaderIn
     return result;
 }
 
-StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, String8 filename) {
+StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, struct StromboliComputePipelineParameters* parameters) {
     MemoryArena* scratch = threadContextGetScratch(0);
     ArenaTempMemory temp = arenaBeginTemp(scratch);
 
     ShaderInfo shaderInfo = {0};
-    VkShaderModule shaderModule = createShaderModule(context, scratch, filename, &shaderInfo);
+    VkShaderModule shaderModule = createShaderModule(context, scratch, parameters->filename, &shaderInfo);
 
     VkPipelineShaderStageCreateInfo shaderStage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
     shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
@@ -318,7 +363,8 @@ StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, Stri
     shaderStage.pName = "main";
     shaderStage.pSpecializationInfo = 0;
 
-    VkDescriptorSetLayout descriptorLayouts[4] = {0};
+    VkDescriptorSetLayout descriptorLayouts[4];
+    MEMORY_COPY_ARRAY(descriptorLayouts, parameters->setLayotus);
     VkDescriptorUpdateTemplate descriptorUpdateTemplates[4] = {0};
     VkPipelineLayout pipelineLayout = createPipelineLayout(context, &shaderInfo, descriptorLayouts, descriptorUpdateTemplates, VK_PIPELINE_BIND_POINT_COMPUTE);
 
@@ -361,17 +407,52 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
     ShaderInfo shaderInfos[] = {vertexShaderInfo, fragmentShaderInfo};
     ShaderInfo combinedInfo = combineShaderInfos(PASS_ARRAY(shaderInfos));
 
+    // SpecializationConstants
+    VkSpecializationInfo specialization;
+    VkSpecializationInfo* specializationPointer = 0;
+    if(parameters->constants && parameters->constantsCount) {
+        VkSpecializationMapEntry* specializationEntries = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, parameters->constantsCount, VkSpecializationMapEntry);
+        for(u32 i = 0; i < parameters->constantsCount; ++i) {
+            s32 index = -1;
+            //TODO: Once spirv reflect supports spec constants we can improve this by actually looking at the shader spec constant defines. We simply use i as index for now
+            /*for(u32 j = 0; j < ARRAY_COUNT(combinedInfo.constants); ++j) {
+                if(combinedInfo.constants[j].name.size) {
+                    if(str8Compare(combinedInfo.constants[j].name, parameters->constants[i].name)) {
+                        index = j;
+                        break;
+                    }
+                }
+            }*/
+            index = i;
+            if(index >= 0) {
+                specializationEntries[index].constantID = i;
+                specializationEntries[index].offset = i * 4;
+                specializationEntries[index].size = sizeof(int);
+            } else {
+                // Not found
+            }
+        }
+
+        specialization = (VkSpecializationInfo){
+            .mapEntryCount = parameters->constantsCount,
+            .pMapEntries = specializationEntries,
+            .dataSize = sizeof(int),
+            .pData = &parameters->constants,
+        };
+        specializationPointer = &specialization;
+    }
+
     VkPipelineShaderStageCreateInfo shaderStages[2] = {0};
     shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shaderStages[0].module = vertexShaderModule;
     shaderStages[0].pName = "main";
     shaderStages[0].stage = vertexShaderInfo.stage;
-    //shaderStages[0].pSpecializationInfo = specializationPointer;
+    shaderStages[0].pSpecializationInfo = specializationPointer;
     shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shaderStages[1].module = fragmentShaderModule;
     shaderStages[1].pName = "main";
     shaderStages[1].stage = fragmentShaderInfo.stage;
-    //shaderStages[1].pSpecializationInfo = specializationPointer;
+    shaderStages[1].pSpecializationInfo = specializationPointer;
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = {VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     if(parameters->primitiveMode == STROMBOLI_PRIMITVE_MODE_LINE_LIST) {
@@ -464,7 +545,8 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
     dynamicState.dynamicStateCount = ARRAY_COUNT(dynamicStates);
     dynamicState.pDynamicStates = dynamicStates;
 
-    VkDescriptorSetLayout descriptorLayouts[4] = {0};
+    VkDescriptorSetLayout descriptorLayouts[4];
+    MEMORY_COPY_ARRAY(descriptorLayouts, parameters->setLayotus);
     VkDescriptorUpdateTemplate descriptorUpdateTemplates[4] = {0};
     VkPipelineLayout pipelineLayout = createPipelineLayout(context, &combinedInfo, descriptorLayouts, descriptorUpdateTemplates, VK_PIPELINE_BIND_POINT_GRAPHICS);
 
@@ -477,6 +559,7 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
         createInfo.pVertexInputState = &combinedInfo.vertexInputCreateInfo;
         createInfo.pInputAssemblyState = &inputAssembly;
         createInfo.pTessellationState = 0;
+        createInfo.pInputAssemblyState = &inputAssembly;
         createInfo.pViewportState = &viewportState;
         createInfo.pRasterizationState = &rasterizer;
         createInfo.pMultisampleState = &multisampling;
@@ -484,8 +567,22 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
         createInfo.pColorBlendState = &colorBlending;
         createInfo.pDynamicState = &dynamicState;
         createInfo.layout = pipelineLayout;
-        createInfo.renderPass = parameters->renderPass;
-        createInfo.subpass = parameters->subpassIndex;
+
+        // VK_KHR_dynamic_rendering
+        VkPipelineRenderingCreateInfo pipelineRenderingInfo = {VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+        if(!parameters->renderPass) {
+            pipelineRenderingInfo.colorAttachmentCount = 1;
+            pipelineRenderingInfo.pColorAttachmentFormats = &parameters->framebufferFormat;
+            if(parameters->depthFormat != VK_FORMAT_UNDEFINED) {
+                pipelineRenderingInfo.depthAttachmentFormat = parameters->depthFormat;
+            }
+            //pipelineRnderingInfo.stencilAttachmentFormat = ;
+            createInfo.pNext = &pipelineRenderingInfo;
+        } else {
+            ASSERT(parameters->renderPass);
+            createInfo.renderPass = parameters->renderPass;
+            createInfo.subpass = parameters->subpassIndex;
+        }
 
         vkCreateGraphicsPipelines(context->device, 0, 1, &createInfo, 0, &pipeline);
     }
@@ -507,11 +604,203 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
     return result;
 }
 
+StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct StromboliRaytracingPipelineParameters* parameters) {
+    //TRACY_ZONE_HELPER(createRaytracingPipeline);
+
+    MemoryArena* scratch = threadContextGetScratch(0);
+    ArenaTempMemory temp = arenaBeginTemp(scratch);
+
+    u32 totalShaderCount = 1; // We always have a raygen shader
+    u32 totalGroupCount = 1;
+    //if(parameters->missShaderCount) totalGroupCount++;
+    totalGroupCount += parameters->missShaderCount;
+    totalShaderCount += parameters->missShaderCount;
+    //if(parameters->hitShaderCount) totalGroupCount++;
+    totalGroupCount += parameters->hitShaderCount;
+    totalShaderCount += parameters->hitShaderCount;
+    totalShaderCount += parameters->intersectionShaderCount;
+    
+    ShaderInfo* shaderInfos = ARENA_PUSH_ARRAY(scratch, totalShaderCount, ShaderInfo);
+    VkShaderModule* shaderModules = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, totalShaderCount, VkShaderModule);
+    VkPipelineShaderStageCreateInfo* stages = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, totalShaderCount, VkPipelineShaderStageCreateInfo);
+    VkRayTracingShaderGroupCreateInfoKHR* groups = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, totalGroupCount, VkRayTracingShaderGroupCreateInfoKHR);
+    
+    u32 currentShaderIndex = 0;
+    shaderModules[currentShaderIndex] = createShaderModule(context, scratch, str8FromCstr(parameters->raygenShaderFilename), &shaderInfos[currentShaderIndex]);
+    currentShaderIndex++;
+    for(u32 i = 0; i < parameters->missShaderCount; ++i) {
+        shaderModules[currentShaderIndex] = createShaderModule(context, scratch, str8FromCstr(parameters->missShaderFilenames[i]), &shaderInfos[currentShaderIndex]);
+        currentShaderIndex++;
+    }
+    for(u32 i = 0; i < parameters->hitShaderCount; ++i) {
+        shaderModules[currentShaderIndex] = createShaderModule(context, scratch, str8FromCstr(parameters->hitShaderFilenames[i]), &shaderInfos[currentShaderIndex]);
+        currentShaderIndex++;
+    }
+    u32 firstIntersectionShaderIndex = currentShaderIndex;
+    for(u32 i = 0; i < parameters->intersectionShaderCount; ++i) {
+        shaderModules[currentShaderIndex] = createShaderModule(context, scratch, str8FromCstr(parameters->intersectionShaders[i].filename), &shaderInfos[currentShaderIndex]);
+        currentShaderIndex++;
+    }
+    ASSERT(currentShaderIndex == totalShaderCount);
+
+    // Merge the shader infos into a single combined info
+    ShaderInfo combinedInfo = combineShaderInfos(totalShaderCount, shaderInfos);
+
+    for(u32 i = 0; i < totalShaderCount; ++i) {
+        stages[i] = (VkPipelineShaderStageCreateInfo){VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        stages[i].stage = shaderInfos[i].stage;
+        stages[i].module = shaderModules[i];
+        stages[i].pName = "main";
+    }
+    
+    u32 currentGroupIndex = 0;
+    currentShaderIndex = 0;
+    // Raygen
+    groups[currentGroupIndex] = (VkRayTracingShaderGroupCreateInfoKHR){VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
+    groups[currentGroupIndex].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+    groups[currentGroupIndex].generalShader = currentShaderIndex++;
+    groups[currentGroupIndex].closestHitShader = VK_SHADER_UNUSED_KHR;
+    groups[currentGroupIndex].anyHitShader = VK_SHADER_UNUSED_KHR;
+    groups[currentGroupIndex].intersectionShader = VK_SHADER_UNUSED_KHR;
+    currentGroupIndex++;
+
+    // Miss
+    for(u32 i = 0; i < parameters->missShaderCount; ++i) {
+        groups[currentGroupIndex] = (VkRayTracingShaderGroupCreateInfoKHR){VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
+        groups[currentGroupIndex].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+        groups[currentGroupIndex].generalShader = currentShaderIndex++;
+        groups[currentGroupIndex].closestHitShader = VK_SHADER_UNUSED_KHR;
+        groups[currentGroupIndex].anyHitShader = VK_SHADER_UNUSED_KHR;
+        groups[currentGroupIndex].intersectionShader = VK_SHADER_UNUSED_KHR;
+        currentGroupIndex++;
+    }
+
+    // Closest hit
+    for(u32 i = 0; i < parameters->hitShaderCount; ++i) {
+        groups[currentGroupIndex] = (VkRayTracingShaderGroupCreateInfoKHR){VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
+        groups[currentGroupIndex].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+        groups[currentGroupIndex].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
+        groups[currentGroupIndex].generalShader = VK_SHADER_UNUSED_KHR;
+        groups[currentGroupIndex].closestHitShader = currentShaderIndex++;
+        groups[currentGroupIndex].anyHitShader = VK_SHADER_UNUSED_KHR;
+        groups[currentGroupIndex].intersectionShader = VK_SHADER_UNUSED_KHR;
+        for(u32 j = 0; j < parameters->intersectionShaderCount; ++j) {
+            if(parameters->intersectionShaders[j].matchingHitShaderIndex == i) {
+                // There should not be multiple intersection shaders that map to the same closest hit shader
+                ASSERT(groups[currentGroupIndex].intersectionShader == VK_SHADER_UNUSED_KHR);
+                groups[currentGroupIndex].intersectionShader = firstIntersectionShaderIndex + j;
+            }
+        }
+        currentGroupIndex++;
+    }
+
+    ASSERT(currentGroupIndex == totalGroupCount);
+    ASSERT(currentShaderIndex == totalShaderCount - parameters->intersectionShaderCount);
+    
+    VkDescriptorSetLayout descriptorLayouts[4] = {0};
+    VkDescriptorUpdateTemplate descriptorUpdateTemplates[4] = {0};
+    VkPipelineLayout pipelineLayout = createPipelineLayout(context, &combinedInfo, descriptorLayouts, descriptorUpdateTemplates, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR);
+
+    VkRayTracingPipelineCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR};
+    createInfo.flags = 0;
+    createInfo.stageCount = totalShaderCount;
+    createInfo.pStages = stages;
+    createInfo.groupCount = totalGroupCount;
+    createInfo.pGroups = groups;
+    createInfo.maxPipelineRayRecursionDepth = 1; // Depth of call tree
+    createInfo.layout = pipelineLayout;
+    
+    VkPipeline pipeline;
+    vkCreateRayTracingPipelinesKHR(context->device, 0, 0, 1, &createInfo, 0, &pipeline);
+
+    // Shader module can be destroyed after pipeline creation
+    for(u32 i = 0; i < totalShaderCount; ++i) {
+        vkDestroyShaderModule(context->device, shaderModules[i], 0);
+    }
+
+    StromboliPipeline result = {0};
+    result.type = STROMBOLI_PIPELINE_TYPE_RAYTRACING;
+    result.pipeline = pipeline;
+    result.layout = pipelineLayout;
+    for(u32 i = 0; i < 4; ++i) {
+        result.descriptorLayouts[i] = descriptorLayouts[i];
+        result.updateTemplates[i] = descriptorUpdateTemplates[i];
+    }
+
+    //TODO: Correct the values here so they match the given parameters 
+    // Create SBT buffer
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR};
+    VkPhysicalDeviceProperties2 otherProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &rayTracingProperties};
+    vkGetPhysicalDeviceProperties2(context->physicalDevice, &otherProperties);
+    const VkDeviceSize sbtHandleSize = rayTracingProperties.shaderGroupHandleSize;
+    const VkDeviceSize sbtBaseAlignment = rayTracingProperties.shaderGroupBaseAlignment;
+    const VkDeviceSize sbtHandleAlignment = rayTracingProperties.shaderGroupHandleAlignment;
+    
+    const VkDeviceSize sbtStride = ALIGN_UP_POW2(sbtHandleSize, sbtHandleAlignment);
+    ASSERT(sbtStride <= rayTracingProperties.maxShaderGroupStride);
+
+    // Lay out regions
+    result.raytracing.sbtRayGenRegion.stride = ALIGN_UP_POW2(sbtStride, sbtBaseAlignment);
+    result.raytracing.sbtRayGenRegion.size = result.raytracing.sbtRayGenRegion.stride;
+    result.raytracing.sbtMissRegion.stride = sbtStride;
+    result.raytracing.sbtMissRegion.size = ALIGN_UP_POW2(parameters->missShaderCount * sbtStride, sbtBaseAlignment);
+    result.raytracing.sbtHitRegion.stride = sbtStride;
+    result.raytracing.sbtHitRegion.size = ALIGN_UP_POW2(parameters->hitShaderCount * sbtStride, sbtBaseAlignment);
+    result.raytracing.sbtCallableRegion.size = 0;
+
+    u32 sbtHandleCount = 1 + parameters->missShaderCount + parameters->hitShaderCount;
+    u32 cpuDataSize = (u32)(sbtHandleSize * sbtHandleCount);
+    u8* cpuShaderHandleStorage = ARENA_PUSH_ARRAY(scratch, cpuDataSize, u8);
+    vkGetRayTracingShaderGroupHandlesKHR(context->device, result.pipeline, 0, sbtHandleCount, cpuDataSize, cpuShaderHandleStorage);
+    
+    u32 sbtSize = (u32)(result.raytracing.sbtRayGenRegion.size + result.raytracing.sbtMissRegion.size + result.raytracing.sbtHitRegion.size + result.raytracing.sbtCallableRegion.size);
+    result.raytracing.sbtBuffer = stromboliCreateBuffer(context, sbtSize, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    
+    // Setup device addresses for each sbt entry
+    const VkDeviceAddress sbtStartAddress = getBufferDeviceAddress(context, &result.raytracing.sbtBuffer);
+    result.raytracing.sbtRayGenRegion.deviceAddress = sbtStartAddress;
+    result.raytracing.sbtMissRegion.deviceAddress = sbtStartAddress + result.raytracing.sbtRayGenRegion.size;
+    result.raytracing.sbtHitRegion.deviceAddress = sbtStartAddress + result.raytracing.sbtRayGenRegion.size + result.raytracing.sbtMissRegion.size;
+    result.raytracing.sbtCallableRegion.deviceAddress = 0;
+
+    // Map sbt buffer and write in the handles
+    u8* mappedSBT = (u8*) result.raytracing.sbtBuffer.mapped;
+    u32 handleIndex = 0;
+    // Raygen
+    memcpy(mappedSBT, cpuShaderHandleStorage, sbtHandleSize);
+    handleIndex++;
+    // Miss
+    mappedSBT += result.raytracing.sbtRayGenRegion.size;
+    for(u32 i = 0; i < parameters->missShaderCount; ++i) {
+        memcpy(mappedSBT, cpuShaderHandleStorage + sbtHandleSize * handleIndex, sbtHandleSize);
+        handleIndex++;
+        mappedSBT += result.raytracing.sbtMissRegion.stride;
+    }
+    // Hit
+    mappedSBT = (u8*) result.raytracing.sbtBuffer.mapped;
+    mappedSBT += result.raytracing.sbtRayGenRegion.size + result.raytracing.sbtMissRegion.size;
+    for(u32 i = 0; i < parameters->missShaderCount; ++i) {
+        memcpy(mappedSBT, cpuShaderHandleStorage + sbtHandleSize * handleIndex, sbtHandleSize);
+        handleIndex++;
+        mappedSBT += result.raytracing.sbtHitRegion.stride;
+    }
+
+    /*for(size_t groupIndex = 0; groupIndex < totalGroupCount; groupIndex++) {
+        memcpy(&mappedSBT[groupIndex * sbtStride], &cpuShaderHandleStorage[groupIndex * sbtHandleSize], sbtHandleSize);
+    }*/
+
+    arenaEndTemp(temp);
+    return result;
+}
+
 void stromboliPipelineDestroy(StromboliContext* context, StromboliPipeline* pipeline) {
     for(u32 i = 0; i < ARRAY_COUNT(pipeline->descriptorLayouts); ++i) {
-        vkDestroyDescriptorSetLayout(context->device, pipeline->descriptorLayouts[i], 0);
+        // We assume here that we created the layout ourselves, when an update template exists for it!
         if(pipeline->updateTemplates[i]) {
-            vkDestroyDescriptorUpdateTemplateKHR(context->device, pipeline->updateTemplates[i], 0);
+            vkDestroyDescriptorSetLayout(context->device, pipeline->descriptorLayouts[i], 0);
+            if(pipeline->updateTemplates[i] != (VkDescriptorUpdateTemplate)1) {
+                vkDestroyDescriptorUpdateTemplateKHR(context->device, pipeline->updateTemplates[i], 0);
+            }
         }
     }
     vkDestroyPipelineLayout(context->device, pipeline->layout, 0);

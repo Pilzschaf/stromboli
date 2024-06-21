@@ -69,7 +69,7 @@ StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 wid
                 attachmentViews[currentAttachmentIndex] = a.imageView;
                 attachments[currentAttachmentIndex] = (VkAttachmentDescription){0};
                 attachments[currentAttachmentIndex].format = a.format;
-                attachments[currentAttachmentIndex].samples = a.sampleCount;
+                attachments[currentAttachmentIndex].samples = a.sampleCount ? a.sampleCount : VK_SAMPLE_COUNT_1_BIT;
                 attachments[currentAttachmentIndex].loadOp = a.loadOp;
                 attachments[currentAttachmentIndex].storeOp = a.storeOp;
                 attachments[currentAttachmentIndex].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -174,6 +174,7 @@ StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 wid
     result.numClearColors = currentClearColorIndex;
 
     // Framebuffer
+    ASSERT(subpassCount == 1);
     u32 numFramebuffers = subpasses->swapchainOutput ? subpasses->swapchainOutput->numImages : 1;
     VkImageView* framebufferViews = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, currentAttachmentIndex, VkImageView);
     for(u32 i = 0; i < numFramebuffers; ++i) {

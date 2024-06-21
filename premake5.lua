@@ -21,6 +21,7 @@ workspace "Stromboli"
         "libs",
         "libs/SPIRV-Reflect",
         "libs/Vulkan-Headers/include",
+        "libs/VulkanMemoryAllocator/include",
     }
     defines
     {
@@ -66,7 +67,13 @@ project "ComputeClear"
     {
         "StromboliStatic",
         "GroundedStatic",
+        "vma",
     }
+    filter "system:linux"
+        links
+        {
+            "stdc++",
+        }
 
 project "Triangle"
     files
@@ -77,7 +84,13 @@ project "Triangle"
     {
         "StromboliStatic",
         "GroundedStatic",
+        "vma",
     }
+    filter "system:linux"
+        links
+        {
+            "stdc++",
+        }
 
 project "GroundedStatic"
     kind "StaticLib"
@@ -123,11 +136,13 @@ project "StromboliStatic"
         "src/stromboli_swapchain.c",
         "src/stromboli_pipeline.c",
         "src/stromboli_renderpass.c",
+        "src/stromboli_utils.c",
         "libs/SPIRV-Reflect/spirv_reflect.c",
     }
     links
     {
         "GroundedStatic",
+        "vma",   
     }
 
 project "StromboliDynamic"
@@ -139,9 +154,29 @@ project "StromboliDynamic"
         "src/stromboli_swapchain.c",
         "src/stromboli_pipeline.c",
         "src/stromboli_renderpass.c",
+        "src/stromboli_utils.c",
         "libs/SPIRV-Reflect/spirv_reflect.c",
     }
     links
     {
         "GroundedDynamic",
     }
+    filter "system:windows"
+        links
+        {
+            "vma",
+        }
+
+project "vma"
+    kind "StaticLib"
+    language "C++"
+    cppdialect "C++17"
+    files
+    {
+        "src/vma.cpp",
+    }
+    filter "system:linux"
+        buildoptions
+        {
+            "-Wno-error",
+        }

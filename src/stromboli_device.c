@@ -62,24 +62,25 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
         GROUNDED_LOG_INFO("Validation layer has been requested by the application");
         u32 availableLayerCount = 0;
         VkLayerProperties* availableLayers;
+        bool foundValidationLayers = false;
         vkEnumerateInstanceLayerProperties(&availableLayerCount, 0);
         if(availableLayerCount > 0) {
             availableLayers = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, availableLayerCount, VkLayerProperties);
             if(availableLayers) {
                 vkEnumerateInstanceLayerProperties(&availableLayerCount, availableLayers);
+                for(u32 i = 0; i < availableLayerCount; ++i) {
+                    if(strcmp(availableLayers[i].layerName, "VK_LAYER_KHRONOS_validation") == 0) {
+                        u32 major = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
+                        u32 minor = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
+                        u32 patch = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
+                        printf("Enabling Khronos validation layer. Spec version: %u.%u.%u\n", major, minor, patch);
+                        foundValidationLayers = true;
+                        break;
+                    }
+                }
             }
         }
-        bool foundValidationLayers = false;
-        for(u32 i = 0; i < availableLayerCount; ++i) {
-            if(strcmp(availableLayers[i].layerName, "VK_LAYER_KHRONOS_validation") == 0) {
-                u32 major = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
-                u32 minor = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
-                u32 patch = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
-                printf("Enabling Khronos validation layer. Spec version: %u.%u.%u\n", major, minor, patch);
-                foundValidationLayers = true;
-                break;
-            }
-        }
+        
         if(!foundValidationLayers) {
             GROUNDED_LOG_WARNING("Validation layer could not be found. Are the Vulkan validation layers / The Vulkan SDK installed?");
         } else {
@@ -261,6 +262,9 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
     if(parameters->dynamicRendering && context->apiVersion < VK_API_VERSION_1_3) {
         requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME;
     }
+    if(parameters->dynamicRenderingUnusedAttachments && context->apiVersion < VK_API_VERSION_1_3) {
+        requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME;
+    }
     if(parameters->synchronization2) { //Promoted to VK_API_VERSION_1_3
         requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME;
     }
@@ -309,10 +313,11 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
                             break;
                         }
                     }
-                    if (!found && false) {
+                    if (!found) {
                         printf("Could not find device extension %s\n", requestedDeviceExtensions[i]);
                         applicable = false;
                         // Do not break here so we can list all missing requested device extensions
+                        printf("GPU %s not used because extension %s is missing\n", properties.deviceName, requestedDeviceExtensions[i]);
                     }
                 }
             }
@@ -415,7 +420,8 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
         VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR};
         VkPhysicalDeviceAccelerationStructureFeaturesKHR asFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
         VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR};
-        
+        VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynamicRenderingUnusedAttachmentsFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT};
+
         if(context->apiVersion >= VK_API_VERSION_1_2) {
             features12.bufferDeviceAddress = parameters->bufferDeviceAddress;
             features12.scalarBlockLayout = parameters->scalarBlockLayout;
@@ -423,6 +429,9 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
             features12.runtimeDescriptorArray = parameters->runtimeDescriptorArray;
             features12.descriptorBindingVariableDescriptorCount = parameters->descriptorBindingVariableDescriptorCount;
             features12.descriptorBindingSampledImageUpdateAfterBind = parameters->descriptorBindingSampledImageUpdateAfterBind;
+            features12.descriptorBindingUniformBufferUpdateAfterBind = parameters->descriptorBindingUniformBufferUpdateAfterBind;
+            features12.descriptorBindingStorageBufferUpdateAfterBind = parameters->descriptorBindingStorageBufferUpdateAfterBind;
+            features12.descriptorBindingStorageImageUpdateAfterBind = parameters->descriptorBindingStorageImageUpdateAfterBind;
             features12.descriptorBindingPartiallyBound = parameters->descriptorBindingPartiallyBound;
             *pNextChain = &features12;
             pNextChain = &features12.pNext;
@@ -459,6 +468,12 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
             pNextChain = &rayTracingFeatures.pNext;
         }
 
+        if(parameters->dynamicRenderingUnusedAttachments) {
+            dynamicRenderingUnusedAttachmentsFeatures.dynamicRenderingUnusedAttachments = true;
+            *pNextChain = &dynamicRenderingUnusedAttachmentsFeatures;
+            pNextChain = &dynamicRenderingUnusedAttachmentsFeatures.pNext;
+        }
+
         if (vkCreateDevice(context->physicalDevice, &createInfo, 0, &context->device)) {
             error = STROMBOLI_MAKE_ERROR(STROMBOLI_DEVICE_CREATE_ERROR, "Failed to create vulkan logical device");
         } else {
@@ -491,8 +506,8 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
         arenaEndTemp(temp);
     }
 
-#if 0
-    if(VULKAN_NO_ERROR(error)) { // Create vma allocator
+#if 1
+    if(STROMBOLI_NO_ERROR(error)) { // Create vma allocator
         VmaVulkanFunctions vmaFunctions = {0};
         vmaFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
         vmaFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
@@ -567,6 +582,9 @@ StromboliResult initStromboli(StromboliContext* context, StromboliInitialization
 }
 
 void shutdownStromboli(StromboliContext* context) {
+    if(context->vmaAllocator) {
+        vmaDestroyAllocator(context->vmaAllocator);
+    }
     if(context->device) {
         vkDestroyDevice(context->device, 0);
     }

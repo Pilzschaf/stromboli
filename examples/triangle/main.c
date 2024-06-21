@@ -15,12 +15,10 @@ VkSemaphore imageReleaseSemaphore;
 
 StromboliRenderSection mainPass;
 
-void resizeApplication(StromboliContext* context, u32 width, u32 height) {
-    vkDeviceWaitIdle(context->device);
-    stromboliSwapchainResize(context, &swapchain, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, width, height);
-}
-
-void createResources(StromboliContext* context) {
+void recreateRenderPass(StromboliContext* context, u32 width, u32 height) {
+    if(renderPass.renderPass) {
+        stromboliRenderpassDestroy(context, &renderPass);
+    }
     struct StromboliAttachment outputAttachment = {
         .format = swapchain.format,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
@@ -37,6 +35,16 @@ void createResources(StromboliContext* context) {
         .swapchainOutput = &swapchain,
     };
     renderPass = stromboliRenderpassCreate(context, swapchain.width, swapchain.height, 1, &subpass);
+}
+
+void resizeApplication(StromboliContext* context, u32 width, u32 height) {
+    vkDeviceWaitIdle(context->device);
+    stromboliSwapchainResize(context, &swapchain, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, width, height);
+    recreateRenderPass(context, width, height);
+}
+
+void createResources(StromboliContext* context) {
+    recreateRenderPass(context, swapchain.width, swapchain.height);
     graphicsPipeline = stromboliPipelineCreateGraphics(context, &(struct StromboliGraphicsPipelineParameters) {
         .vertexShaderFilename = STR8_LITERAL("examples/triangle/triangle.vert.spv"),
         .fragmentShaderFilename = STR8_LITERAL("examples/triangle/triangle.frag.spv"),
@@ -62,7 +70,7 @@ void renderFrame(StromboliContext* context) {
     vkWaitForFences(context->device, 1, &mainPass.fences[0], true, UINT64_MAX);
     u32 imageIndex = 0;
     VkResult acquireResult = vkAcquireNextImageKHR(context->device, swapchain.swapchain, UINT64_MAX, imageAcquireSemaphore, 0, &imageIndex);
-    ASSERT(acquireResult == VK_SUCCESS);
+    ASSERT(acquireResult == VK_SUCCESS || acquireResult == VK_SUBOPTIMAL_KHR);
 
     VkCommandBuffer commandBuffer = beginRenderSection(context, &mainPass, 0, "Main pass");
         stromboliCmdBeginRenderpass(commandBuffer, &renderPass, swapchain.width, swapchain.height, imageIndex);
@@ -82,7 +90,7 @@ void renderFrame(StromboliContext* context) {
     presentInfo.waitSemaphoreCount = 1;
     presentInfo.pWaitSemaphores = &imageReleaseSemaphore;
     VkResult presentResult = vkQueuePresentKHR(context->graphicsQueues[0].queue, &presentInfo);
-    ASSERT(presentResult == VK_SUCCESS);
+    ASSERT(presentResult == VK_SUCCESS || presentResult == VK_SUBOPTIMAL_KHR);
 }
 
 int main(int argc, char** argv) {
@@ -135,7 +143,7 @@ int main(int argc, char** argv) {
                 break;
             }
             if(events[i].type == GROUNDED_EVENT_TYPE_RESIZE) {
-                stromboliSwapchainResize(&context, &swapchain, VK_IMAGE_USAGE_STORAGE_BIT, events[i].resize.width, events[i].resize.height);
+                resizeApplication(&context, events[i].resize.width, events[i].resize.height);
             }
         }
 

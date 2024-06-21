@@ -2,8 +2,7 @@
 
 static inline void stromboliNameObject(StromboliContext* context, u64 handle, VkObjectType type, const char* name) {
 	if (vkSetDebugUtilsObjectNameEXT) {
-		VkDebugUtilsObjectNameInfoEXT nameInfo = { 0 };
-		nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		VkDebugUtilsObjectNameInfoEXT nameInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
 		nameInfo.objectType = type;
 		nameInfo.objectHandle = handle;
 		nameInfo.pObjectName = name;
@@ -74,7 +73,6 @@ static inline void stromboliCmdSetViewportAndScissor(VkCommandBuffer commandBuff
 	scissors.offset.y = 0;
 	scissors.extent.width = width;
 	scissors.extent.height = height;
-
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissors);
 }
 
@@ -254,4 +252,133 @@ inline static void endRenderSection(StromboliContext* context, StromboliRenderSe
 	//groundedLockMutex(&section->queue->mutex);
 	vkQueueSubmit(section->queue->queue, 1, &submitInfo, section->fences[frameIndex]);
 	//groundedUnlockMutex(&section->queue->mutex);
+}
+
+// If it returns false, the swapchain should be resized
+inline static bool presentImage(StromboliContext* context, StromboliSwapchain* swapchain, VkSemaphore releaseSemaphore, u32 imageIndex) {
+	VkPresentInfoKHR presentInfo = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &releaseSemaphore;
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &swapchain->swapchain;
+	presentInfo.pImageIndices = &imageIndex;
+	StromboliQueue* queue = &context->graphicsQueues[0];
+	ASSERT(queue->flags & STROMBOLI_QUEUE_FLAG_SUPPORTS_PRESENT);
+	VkResult result = vkQueuePresentKHR(queue->queue, &presentInfo);
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+		// Swapchain is out of date
+		//groundedLockMutex(&queue->mutex);
+		vkQueueWaitIdle(queue->queue);
+		//groundedUnlockMutex(&queue->mutex);
+		return false;
+	}
+	return true;
+}
+
+static inline void stromboliCmdCopyImageToSwapchain(VkCommandBuffer commandBuffer, StromboliImage* source, VkFormat sourceFormat, StromboliSwapchain* swapchain, u32 imageIndex) {
+	if (swapchain->format == sourceFormat) {
+		// Formats match so do a simple blit
+		VkImageCopy region = { 0 };
+		region.srcOffset = (VkOffset3D){ 0 };
+		region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		region.srcSubresource.baseArrayLayer = 0;
+		region.srcSubresource.layerCount = 1;
+		region.srcSubresource.mipLevel = 0;
+		region.dstOffset = (VkOffset3D){ 0 };
+		region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		region.dstSubresource.baseArrayLayer = 0;
+		region.dstSubresource.layerCount = 1;
+		region.dstSubresource.mipLevel = 0;
+		region.extent = (VkExtent3D){ swapchain->width, swapchain->height, 1 };
+
+		vkCmdCopyImage(commandBuffer, source->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			swapchain->images[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+	}
+	else {
+		VkOffset3D blitSize;
+		blitSize.x = swapchain->width;
+		blitSize.y = swapchain->height;
+		blitSize.z = 1;
+		VkImageBlit imageBlitRegion = { 0 };
+		imageBlitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		imageBlitRegion.srcSubresource.layerCount = 1;
+		imageBlitRegion.srcOffsets[1] = blitSize;
+		imageBlitRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		imageBlitRegion.dstSubresource.layerCount = 1;
+		imageBlitRegion.dstOffsets[1] = blitSize;
+
+		// Issue the blit command
+		vkCmdBlitImage(
+			commandBuffer,
+			source->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			swapchain->images[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			1,
+			&imageBlitRegion,
+			VK_FILTER_NEAREST);
+	}
+}
+
+static inline void stromboliCmdCopyWholeImage(VkCommandBuffer commandBuffer, StromboliImage* source, StromboliImage* target) {
+	ASSERT(source->width == target->width);
+	ASSERT(source->height == target->height);
+	ASSERT(source->depth == target->depth);
+
+	VkImageCopy region = { 0 };
+	region.srcOffset = (VkOffset3D){ 0 };
+	region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	region.srcSubresource.baseArrayLayer = 0;
+	region.srcSubresource.layerCount = 1;
+	region.srcSubresource.mipLevel = 0;
+	region.dstOffset = (VkOffset3D){ 0 };
+	region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	region.dstSubresource.baseArrayLayer = 0;
+	region.dstSubresource.layerCount = 1;
+	region.dstSubresource.mipLevel = 0;
+	region.extent = (VkExtent3D){ source->width, source->height, source->depth };
+	vkCmdCopyImage(commandBuffer, source->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		target->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+}
+
+// If it returns false, acquiring has not succeeded and the swapchain must be resized.
+// Fence must make sure that the acquire semaphore is ready to be used again eg. that the submit that last used it has completed
+inline static bool acquireImage(StromboliContext* context, StromboliSwapchain* swapchain, VkSemaphore acquireSemaphore, VkFence fence, u32* imageIndex) {
+
+	// Wait for the n-MAX_FRAMES_IN_FLIGHT frame to finish to be able to reuse its acquireSemaphore in vkAcquireNextImageKHR
+	if (fence) {
+		vkWaitForFences(context->device, 1, &fence, VK_TRUE, UINT64_MAX);
+	}
+
+	VkResult result = vkAcquireNextImageKHR(context->device, swapchain->swapchain, UINT64_MAX, acquireSemaphore, 0, imageIndex);
+	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+		// Swapchain is out of date
+		//groundedLockMutex(&context->graphicsQueues[0].mutex);
+		vkQueueWaitIdle(context->graphicsQueues[0].queue);
+		//groundedUnlockMutex(&context->graphicsQueues[0].mutex);
+		return false;
+	}
+	return true;
+}
+
+static inline void stromboliCmdTraceRays(VkCommandBuffer commandBuffer, StromboliPipeline* pipeline, u32 width, u32 height) {
+	ASSERT(pipeline->type == STROMBOLI_PIPELINE_TYPE_RAYTRACING);
+	vkCmdTraceRaysKHR(commandBuffer, &pipeline->raytracing.sbtRayGenRegion, &pipeline->raytracing.sbtMissRegion, &pipeline->raytracing.sbtHitRegion, &pipeline->raytracing.sbtCallableRegion, width, height, 1);
+}
+
+static inline void stromboliCmdDispatch(VkCommandBuffer commandBuffer, StromboliPipeline* pipeline, u32 width, u32 height) {
+	ASSERT(pipeline->type == STROMBOLI_PIPELINE_TYPE_COMPUTE);
+	u32 workgroupWidth = pipeline->compute.workgroupWidth;
+	u32 workgroupHeight = pipeline->compute.workgroupHeight;
+	ASSERT(workgroupWidth > 0 && workgroupHeight > 0);
+	vkCmdDispatch(commandBuffer, (width + (workgroupWidth-1)) / workgroupWidth, (height + (workgroupHeight-1)) / workgroupHeight, 1);
+}
+
+static inline VkDescriptorSet createDescriptorSet(StromboliContext* context, StromboliPipeline* pipeline, VkDescriptorPool descriptorPool, u32 setIndex) {
+	VkDescriptorSet result = {0};
+	VkDescriptorSetAllocateInfo allocateInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+	allocateInfo.descriptorPool = descriptorPool;
+	allocateInfo.descriptorSetCount = 1;
+	allocateInfo.pSetLayouts = pipeline->descriptorLayouts + setIndex;
+	VkResult error = vkAllocateDescriptorSets(context->device, &allocateInfo, &result);
+	ASSERT(error == VK_SUCCESS);
+	return result;
 }
