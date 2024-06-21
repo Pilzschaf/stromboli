@@ -545,7 +545,8 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
     dynamicState.dynamicStateCount = ARRAY_COUNT(dynamicStates);
     dynamicState.pDynamicStates = dynamicStates;
 
-    VkDescriptorSetLayout descriptorLayouts[4] = {0};
+    VkDescriptorSetLayout descriptorLayouts[4];
+    MEMORY_COPY_ARRAY(descriptorLayouts, parameters->setLayotus);
     VkDescriptorUpdateTemplate descriptorUpdateTemplates[4] = {0};
     VkPipelineLayout pipelineLayout = createPipelineLayout(context, &combinedInfo, descriptorLayouts, descriptorUpdateTemplates, VK_PIPELINE_BIND_POINT_GRAPHICS);
 
