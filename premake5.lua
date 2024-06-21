@@ -68,8 +68,12 @@ project "ComputeClear"
         "StromboliStatic",
         "GroundedStatic",
         "vma",
-        "stdc++",
     }
+    filter "system:linux"
+        links
+        {
+            "stdc++",
+        }
 
 project "Triangle"
     files
@@ -81,8 +85,12 @@ project "Triangle"
         "StromboliStatic",
         "GroundedStatic",
         "vma",
-        "stdc++",
     }
+    filter "system:linux"
+        links
+        {
+            "stdc++",
+        }
 
 project "GroundedStatic"
     kind "StaticLib"
@@ -134,7 +142,7 @@ project "StromboliStatic"
     links
     {
         "GroundedStatic",
-        "vma",
+        "vma",   
     }
 
 project "StromboliDynamic"
