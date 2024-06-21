@@ -583,41 +583,6 @@ void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploa
     uploadContext->scratchOffset = 0;
 }
 
-void createFramebuffer(StromboliContext* context, StromboliFramebuffer* framebuffer, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage) {
-	for(int i = 0; i < MAX_SWAPCHAIN_IMAGES; ++i) {
-		framebuffer->images[i] = stromboliImageCreate(context, width, height, format, usage, 0);
-	}
-	framebuffer->sampleCount = VK_SAMPLE_COUNT_1_BIT;
-	framebuffer->format = format;
-	framebuffer->usage = usage;
-}
-
-void createFramebufferMultisampled(StromboliContext* context, StromboliFramebuffer* framebuffer, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage, VkSampleCountFlags sampleCount) {
-	for(int i = 0; i < MAX_SWAPCHAIN_IMAGES; ++i) {
-		framebuffer->images[i] = stromboliImageCreate(context, width, height, format, usage, &(struct StromboliImageParameters){
-			.sampleCount = sampleCount,
-		});
-	}
-	framebuffer->sampleCount = sampleCount;
-	framebuffer->format = format;
-	framebuffer->usage = usage;
-}
-
-void resizeFramebuffer(StromboliContext* context, StromboliFramebuffer* framebuffer, u32 width, u32 height) {
-	for(int i = 0; i < MAX_SWAPCHAIN_IMAGES; ++i) {
-		stromboliImageDestroy(context, &framebuffer->images[i]);
-		framebuffer->images[i] = stromboliImageCreate(context, width, height, framebuffer->format, framebuffer->usage, &(struct StromboliImageParameters){
-			.sampleCount = framebuffer->sampleCount,
-		});
-	}
-}
-
-void destroyFramebuffer(StromboliContext* context, StromboliFramebuffer* framebuffer) {
-	for(int i = 0; i < MAX_SWAPCHAIN_IMAGES; ++i) {
-		stromboliImageDestroy(context, &framebuffer->images[i]);
-	}
-}
-
 void uploadDataToImageSubregion(StromboliContext* context, StromboliImage* image, void* data, u64 size, u32 width, u32 height, u32 depth, u32 mipLevel, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext) {
 	//TRACY_ZONE_HELPER(uploadDataToImageSubregion);
 

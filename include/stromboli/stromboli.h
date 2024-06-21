@@ -150,13 +150,6 @@ struct StromboliImageParameters {
     bool cubemap;
 };
 
-typedef struct StromboliFramebuffer {
-    StromboliImage images[MAX_SWAPCHAIN_IMAGES];
-    VkFormat format;
-    VkImageUsageFlags usage;
-    VkSampleCountFlags sampleCount;
-} StromboliFramebuffer;
-
 typedef struct StromboliDescriptorInfo {
     union {
         VkDescriptorBufferInfo bufferInfo;
@@ -386,11 +379,6 @@ u64 uploadToScratch(StromboliContext* context, StromboliUploadContext* uploadCon
 void submitUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext, u32 signalSemaphoreCount, VkSemaphore* signalSemaphores);
 void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext);
 bool isDepthFormat(VkFormat format);
-
-void createFramebuffer(StromboliContext* context, StromboliFramebuffer* framebuffer, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage);
-void createFramebufferMultisampled(StromboliContext* context, StromboliFramebuffer* framebuffer, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage, VkSampleCountFlags sampleCount);
-void resizeFramebuffer(StromboliContext* context, StromboliFramebuffer* framebuffer, u32 width, u32 height);
-void destroyFramebuffer(StromboliContext* context, StromboliFramebuffer* framebuffer);
 
 VkDeviceAddress getBufferDeviceAddress(StromboliContext* context, StromboliBuffer* buffer);
 StromboliAccelerationStructure createAccelerationStructure(StromboliContext* context, u32 count, VkAccelerationStructureGeometryKHR* geometries, VkAccelerationStructureBuildRangeInfoKHR* buildRanges, bool allowUpdate, bool compact, StromboliUploadContext* uploadContext);
