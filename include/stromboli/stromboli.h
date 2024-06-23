@@ -276,7 +276,7 @@ typedef struct StromboliGraphicsPipelineParameters {
     enum StromboliCullMode cullMode;
     VkSampleCountFlags multisampleCount;
     u32 additionalAttachmentCount;
-    VkFormat framebufferFormat;
+    VkFormat* framebufferFormats;
     VkFormat depthFormat;
 
     StromboliSpecializationConstant* constants;

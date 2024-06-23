@@ -571,8 +571,8 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
         // VK_KHR_dynamic_rendering
         VkPipelineRenderingCreateInfo pipelineRenderingInfo = {VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
         if(!parameters->renderPass) {
-            pipelineRenderingInfo.colorAttachmentCount = 1;
-            pipelineRenderingInfo.pColorAttachmentFormats = &parameters->framebufferFormat;
+            pipelineRenderingInfo.colorAttachmentCount = 1 + parameters->additionalAttachmentCount;
+            pipelineRenderingInfo.pColorAttachmentFormats = parameters->framebufferFormats;
             if(parameters->depthFormat != VK_FORMAT_UNDEFINED) {
                 pipelineRenderingInfo.depthAttachmentFormat = parameters->depthFormat;
             }
