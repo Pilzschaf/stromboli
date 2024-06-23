@@ -40,6 +40,7 @@ struct RenderAttachment {
     RenderGraphImageHandle imageHandle;
     //TODO: Should probably store producer here for combined input+output framebuffer support (as producers are changing for a single image)
     struct RenderGraphBuildPass* producer; 
+    struct RenderGraphBuildPass* lastReader; // Can be null
     bool requiresClear;
 };
 
@@ -52,6 +53,7 @@ struct RenderGraphBuildPass {
     struct RenderAttachment outputs[8];
     u32 inputCount;
     u32 outputCount;
+    bool external; // This indicates that this pass produces external output and must not be evicted when compiling
 };
 
 struct RenderGraphPass {
@@ -59,7 +61,7 @@ struct RenderGraphPass {
     RenderGraph* graph;
     VkCommandBuffer commandBuffer;
     enum RenderGraphPassType type;
-    u32 passIndex;
+    //u32 passIndex;
 
     struct RenderAttachment inputs[8];
     struct RenderAttachment outputs[8];
@@ -82,11 +84,12 @@ struct RenderGraph {
     VkSemaphore imageReleaseSemaphore;
     RenderGraphImageHandle finalImageHandle;
     VkImageMemoryBarrier2KHR finalImageBarrier;
-    u32 swapchainOutputPassIndex;
+    u32 swapchainOutputPassIndex; // required to know where to put layout transitions for swapchain images
 
     RenderGraphPass* sortedPasses;
     u32 passCount;
     u32 commandBufferCountPerFrame;
+    u16* buildPassToSortedPass;
 
     StromboliImage* images;
     VkClearValue* clearValues;

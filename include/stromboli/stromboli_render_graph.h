@@ -44,6 +44,7 @@ RenderGraphImageHandle renderPassAddClearedOutput(RenderGraphBuilder* builder, R
 RenderGraphImageHandle renderPassAddOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, u32 width, u32 height, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage, VkFormat format);
 RenderGraphImageHandle renderPassAddInput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, RenderGraphImageHandle input, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage);
 RenderGraphImageHandle renderPassAddInputOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, RenderGraphImageHandle input, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage);
+void renderPassSetExternal(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, bool external); // Marks the render pass as producing external resources. This makes sure the pass is not pruned when compiling
 VkFormat renderGraphImageGetFormat(RenderGraphBuilder* builder, RenderGraphImageHandle image);
 u32 renderGraphImageGetWidth(RenderGraphBuilder* builder, RenderGraphImageHandle image);
 u32 renderGraphImageGetHeight(RenderGraphBuilder* builder, RenderGraphImageHandle image);

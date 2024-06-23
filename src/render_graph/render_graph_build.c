@@ -181,7 +181,11 @@ RenderGraphImageHandle renderPassAddInput(RenderGraphBuilder* builder, RenderGra
     pass->inputs[pass->inputCount].stage = stage;
     pass->inputs[pass->inputCount].usage = usage;
     struct RenderGraphBuildImage* input = getImageFromHandle(builder, inputHandle);
+
+    //(outdated) As we have possibly changed layout etc. we mark ourselves as producer as otherwise the barriers could be in the wrong order and therefore do wrong layout transitions
     pass->inputs[pass->inputCount].producer = input->producer;
+    pass->inputs[pass->inputCount].lastReader = pass;
+    
     pass->inputs[pass->inputCount++].imageHandle = inputHandle;
 
     // We simply return the input handle
@@ -210,6 +214,7 @@ RenderGraphImageHandle renderPassAddInputOutput(RenderGraphBuilder* builder, Ren
     pass->inputs[pass->inputCount].stage = stage;
     pass->inputs[pass->inputCount].usage = usage;
     pass->inputs[pass->inputCount].producer = input->producer;
+    //pass->inputs[pass->inputCount].lastReader = pass; // while not hurting this should not be necessary as we are producing an output
     pass->inputs[pass->inputCount++].imageHandle = inputHandle;
 
     input->producer = pass;
@@ -220,6 +225,13 @@ RenderGraphImageHandle renderPassAddInputOutput(RenderGraphBuilder* builder, Ren
     pass->outputs[pass->outputCount++].imageHandle = inputHandle;
 
     return inputHandle;
+}
+
+void renderPassSetExternal(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, bool external) {
+    struct RenderGraphBuildPass* pass = getPassFromHandle(builder, passHandle);
+    if(pass) {
+        pass->external = external;
+    }
 }
 
 VkFormat renderGraphImageGetFormat(RenderGraphBuilder* builder, RenderGraphImageHandle imageHandle) {

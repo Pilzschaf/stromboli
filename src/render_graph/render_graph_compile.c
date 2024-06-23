@@ -41,6 +41,10 @@ static void sortPasses(RenderGraphBuilder* builder, u32 passCount, RenderGraph* 
     }
 
     // Topological sort
+    result->buildPassToSortedPass = ARENA_PUSH_ARRAY(&result->arena, passCount, u16);
+    for(u32 i = 0; i < passCount; ++i) {
+        result->buildPassToSortedPass[i] = UINT16_MAX;
+    }
     RenderGraphPass* sortedPasses = ARENA_PUSH_ARRAY(&result->arena, passCount, RenderGraphPass);
     u32 sortedCount = 0;
 
@@ -50,58 +54,73 @@ static void sortPasses(RenderGraphBuilder* builder, u32 passCount, RenderGraph* 
     u32 stackSize = 0;
 
     // Do a DFS
-    u32 i = result->swapchainOutputPassIndex;
-    //for(u32 i = 0; i < passCount; ++i) {
+    //u32 i = result->swapchainOutputPassIndex;
+    for(u32 i = 0; i < passCount; ++i) {
+        if(!getPassAtIndex(firstPass, i)->external || visited[i]) {
+            // No entrypoint as not external or already visited
+            continue;
+        }
         // Push
-    stack[stackSize++] = i;
-    visited[i] = 1;
-    while(stackSize > 0) {
-        ASSERT(stackSize <= passCount);
-        u32 passIndex = stack[stackSize-1];
-        if(visited[passIndex] == 3) {
-            // Pop
-            stackSize--;
-            continue;
-        }
-        if(visited[passIndex] == 2) {
-            visited[passIndex] = 3;
-            struct RenderGraphBuildPass* buildPass = getPassAtIndex(firstPass, passIndex);
-            sortedPasses[sortedCount].name = buildPass->name; //TODO: Could do a strCopy here with result->arena
-            sortedPasses[sortedCount].type = buildPass->type;
-            sortedPasses[sortedCount].inputCount = buildPass->inputCount;
-            sortedPasses[sortedCount].outputCount = buildPass->outputCount;
-            MEMORY_COPY_ARRAY(sortedPasses[sortedCount].inputs, buildPass->inputs);
-            MEMORY_COPY_ARRAY(sortedPasses[sortedCount].outputs, buildPass->outputs);
-            sortedCount++;
-            // Pop
-            stackSize--;
-            continue;
-        }
-        // First visit
-        visited[passIndex] = 2;
-        struct RenderGraphBuildPass* pass = getPassAtIndex(firstPass, passIndex);
-        if(pass->inputCount == 0) {
-            // Leaf node
-            continue;
-        }
-        // Iterate through all edges and add them to the stack
-        // Edges are basically inputs->producer
-        for(u32 j = 0; j < pass->inputCount; ++j) {
-            struct RenderGraphBuildImage* input = getImageFromHandle(builder, pass->inputs[j].imageHandle);
-            struct RenderGraphBuildPass* producer = pass->inputs[j].producer;
-            ASSERT(producer);
-            struct RenderGraphBuildPass* child = producer;
-            u32 childIndex = getIndexOfPass(firstPass, child);
-            ASSERT(childIndex < passCount);
-            if(!visited[childIndex]) {
-                // Push
-                stack[stackSize++] = childIndex;
-                visited[childIndex] = 1;
+        stack[stackSize++] = i;
+        visited[i] = 1;
+        while(stackSize > 0) {
+            ASSERT(stackSize <= passCount);
+            u32 passIndex = stack[stackSize-1];
+            if(visited[passIndex] == 3) {
+                // Pop
+                stackSize--;
+                continue;
+            }
+            if(visited[passIndex] == 2) {
+                visited[passIndex] = 3;
+                struct RenderGraphBuildPass* buildPass = getPassAtIndex(firstPass, passIndex);
+                sortedPasses[sortedCount].name = buildPass->name; //TODO: Could do a strCopy here with result->arena
+                sortedPasses[sortedCount].type = buildPass->type;
+                sortedPasses[sortedCount].inputCount = buildPass->inputCount;
+                sortedPasses[sortedCount].outputCount = buildPass->outputCount;
+                MEMORY_COPY_ARRAY(sortedPasses[sortedCount].inputs, buildPass->inputs);
+                MEMORY_COPY_ARRAY(sortedPasses[sortedCount].outputs, buildPass->outputs);
+                result->buildPassToSortedPass[passCount - passIndex - 1] = sortedCount++;
+                // Pop
+                stackSize--;
+                continue;
+            }
+            // First visit
+            visited[passIndex] = 2;
+            struct RenderGraphBuildPass* pass = getPassAtIndex(firstPass, passIndex);
+            if(pass->inputCount == 0) {
+                // Leaf node
+                continue;
+            }
+            // Iterate through all edges and add them to the stack
+            // Edges are basically inputs->producer
+            for(u32 j = 0; j < pass->inputCount; ++j) {
+                struct RenderGraphBuildImage* input = getImageFromHandle(builder, pass->inputs[j].imageHandle);
+                struct RenderGraphBuildPass* producer = pass->inputs[j].producer;
+                ASSERT(producer);
+                struct RenderGraphBuildPass* child = producer;
+                u32 childIndex = getIndexOfPass(firstPass, child);
+                ASSERT(childIndex < passCount);
+                if(!visited[childIndex]) {
+                    // Push
+                    stack[stackSize++] = childIndex;
+                    visited[childIndex] = 1;
+                }
+                /*struct RenderGraphBuildPass* lastReader = pass->inputs[j].lastReader;
+                if(lastReader) {
+                    u32 childIndex = getIndexOfPass(firstPass, lastReader);
+                    ASSERT(childIndex < passCount);
+                    if(!visited[childIndex]) {
+                        // Push
+                        stack[stackSize++] = childIndex;
+                        visited[childIndex] = 1;
+                    }
+                }*/
             }
         }
     }
-    //}
-    ASSERT(sortedCount == passCount);
+    ASSERT(sortedCount <= passCount);
+
 
     // SortedPasses is acually in reverse order so reverse it...
     /*for(u32 i = 0; i < sortedCount / 2; ++i) {
@@ -111,7 +130,6 @@ static void sortPasses(RenderGraphBuilder* builder, u32 passCount, RenderGraph* 
     }*/
 
     for(u32 i = 0; i < sortedCount; ++i) {
-        sortedPasses[i].passIndex = i;
         sortedPasses[i].graph = result;
         for(u32 j = 0; j < sortedPasses[i].outputCount; ++j) {
             //struct RenderGraphBuildImage* output = getImageFromHandle(builder, sortedPasses[i].outputs[j].imageHandle);
@@ -197,6 +215,7 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
 
         // Sort passes
         result->swapchainOutputPassIndex = getIndexOfPass(builder->passSentinel.next, swapchainOutput->producer);
+        swapchainOutput->producer->external = true;
         struct RenderGraphBuildPass* firstPass = builder->passSentinel.next;
         u32 passCount = 0;
         struct RenderGraphBuildPass* pass = firstPass;

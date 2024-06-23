@@ -16,12 +16,14 @@ RenderGraphPass* beginRenderPass(RenderGraph* graph, RenderGraphPassHandle passH
 
     RenderGraphPass* pass = 0;
     if(passHandleValue > 0) {
-        pass = &graph->sortedPasses[passHandleValue-1];
+        u32 sortedHandle = graph->buildPassToSortedPass[passHandleValue-1];
+        if(sortedHandle != UINT32_MAX) {
+            pass = &graph->sortedPasses[sortedHandle];
+        }
     }
 
     if(pass) {
-        ASSERT(pass->outputCount > 0);
-        VkCommandBuffer commandBuffer = graph->commandBuffers[pass->passIndex+graph->commandBufferOffset];
+        VkCommandBuffer commandBuffer = graph->commandBuffers[(pass - graph->sortedPasses)+graph->commandBufferOffset];
         pass->commandBuffer = commandBuffer;
 
         VkCommandBufferBeginInfo beginInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
@@ -312,12 +314,11 @@ void renderGraphPrint(RenderGraph* graph) {
     }
     for(u32 passIndex = 0; passIndex < graph->passCount; ++passIndex) {
         RenderGraphPass pass = graph->sortedPasses[passIndex];
-        ASSERT(passIndex == pass.passIndex);
         printf("Pass%u: %.*s\n", passIndex, (int)pass.name.size, (const char*)pass.name.base);
         if(passIndex == graph->swapchainOutputPassIndex) {
             printf("\tSwapchain output\n");
         }
-        printf("\tCommand buffer: %p\n", graph->commandBuffers[graph->commandBufferOffset + pass.passIndex]);
+        printf("\tCommand buffer: %p\n", graph->commandBuffers[graph->commandBufferOffset + passIndex]);
 
         printf("\tBarriers:\n");
         for(u32 i = 0; i < pass.imageBarrierCount; ++i) {
