@@ -99,7 +99,10 @@ struct RenderGraph {
 
     StromboliImage* imageDeleteQueue; // Images to delete once we have waited for the respective fence
     u32 imageDeleteCount;
+    float lastDuration; // The total duration of the last execution in seconds
+    u32 timestampCount;
 
+    VkQueryPool queryPools[2];
     VkCommandPool commandPools[2];
     VkCommandBuffer* commandBuffers; // Each pass uses passIndex+commandBufferOffset as its pass
     u32 commandBufferOffset; // Switches between 0 and commandBufferCountPerFrame

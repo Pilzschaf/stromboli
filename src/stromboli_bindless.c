@@ -15,6 +15,7 @@ static u32 currentFrameIndex = 0;
 #endif
 
 VkDescriptorSetLayout stromboliBindlessGetDescriptorSetLayout() {
+    ASSERT(bindlessLayout);
     return bindlessLayout;
 }
 

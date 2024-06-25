@@ -337,12 +337,24 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
 
         // Create command pools if not existing
         if(!result->commandPools[0]) {
-            for(u32 i = 0; i < 2; ++i) {
+            for(u32 i = 0; i < ARRAY_COUNT(result->commandPools); ++i) {
                 VkCommandPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
                 createInfo.queueFamilyIndex = builder->context->graphicsQueues[0].familyIndex;
                 vkCreateCommandPool(builder->context->device, &createInfo, 0, &result->commandPools[i]);
             }
         }
+
+        // Create query pools if not existing
+        if(!result->queryPools[0]) {
+            for(u32 i = 0; i < ARRAY_COUNT(result->queryPools); ++i) {
+                VkQueryPoolCreateInfo createInfo = { VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO };
+                createInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+                //createInfo.queryCount = MAX_TIMING_SECTIONS_PER_RENDER_SECTION * 2;
+                createInfo.queryCount = 2;
+                vkCreateQueryPool(builder->context->device, &createInfo, 0, &result->queryPools[i]);
+            }
+        }
+        //result->timestampCount = 0;
 
         // Allocate commandbuffers
         result->commandBufferCountPerFrame = MAX(result->passCount, oldCommandBufferCountPerFrame);

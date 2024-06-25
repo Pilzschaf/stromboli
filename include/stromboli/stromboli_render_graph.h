@@ -61,6 +61,7 @@ VkCommandBuffer renderPassGetCommandBuffer(RenderGraphPass* pass);
 StromboliImage* renderPassGetInputResource(RenderGraphPass* pass, RenderGraphImageHandle image);
 StromboliImage* renderPassGetOutputResource(RenderGraphPass* pass, RenderGraphImageHandle image);
 bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFence fence); // Returns false if swapchain must be resized
+float renderGraphGetLastDuration(RenderGraph* graph);
 
 void renderGraphBuilderPrint(RenderGraphBuilder* builder);
 void renderGraphPrint(RenderGraph* graph);

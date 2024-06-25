@@ -379,6 +379,7 @@ u64 uploadToScratch(StromboliContext* context, StromboliUploadContext* uploadCon
 void submitUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext, u32 signalSemaphoreCount, VkSemaphore* signalSemaphores);
 void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext);
 bool isDepthFormat(VkFormat format);
+VkSampler stromboliSamplerCreate(StromboliContext* context, bool linear);
 
 VkDeviceAddress getBufferDeviceAddress(StromboliContext* context, StromboliBuffer* buffer);
 StromboliAccelerationStructure createAccelerationStructure(StromboliContext* context, u32 count, VkAccelerationStructureGeometryKHR* geometries, VkAccelerationStructureBuildRangeInfoKHR* buildRanges, bool allowUpdate, bool compact, StromboliUploadContext* uploadContext);

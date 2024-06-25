@@ -30,6 +30,13 @@ RenderGraphPass* beginRenderPass(RenderGraph* graph, RenderGraphPassHandle passH
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
+        if(pass == &graph->sortedPasses[0]) {
+            // First command buffer
+            vkCmdResetQueryPool(commandBuffer, graph->queryPools[0], 0, 2);
+            vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, graph->queryPools[0], 0);
+            graph->timestampCount++;
+        }
+
         // Layout transitions
         stromboliPipelineBarrier(commandBuffer, 0, 0, 0, pass->imageBarrierCount, pass->imageBarriers);
         
@@ -149,6 +156,26 @@ bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFen
         graph->imageDeleteQueue = 0;
     }
 
+    // Read timestamps
+    uint64_t timestamps[2] = { 0 };
+    u32 timestampCount = graph->timestampCount;
+    if(timestampCount > 1) {
+        VkResult timestampsValid = vkGetQueryPoolResults(context->device, graph->queryPools[0], 0, timestampCount, sizeof(timestamps), timestamps, sizeof(timestamps[0]), VK_QUERY_RESULT_64_BIT);
+        if(timestampsValid == VK_SUCCESS) {
+            u32 startIndex = 0;
+            u32 endIndex = 1;
+            double begin = ((double)timestamps[startIndex]) * context->physicalDeviceProperties.limits.timestampPeriod * 1e-9;
+            double end = ((double)timestamps[endIndex]) * context->physicalDeviceProperties.limits.timestampPeriod * 1e-9;
+            float delta = (float)(end - begin);
+            graph->lastDuration = delta;
+        } else {
+            graph->lastDuration = 0.0f;
+        }
+    } else {
+        graph->lastDuration = 0.0f;
+    }
+    graph->timestampCount = 0;
+
     // Acquire image
     u32 imageIndex;
     VkResult acquireResult = vkAcquireNextImageKHR(context->device, swapchain->swapchain, UINT64_MAX, graph->imageAcquireSemaphore, 0, &imageIndex);
@@ -202,6 +229,11 @@ bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFen
             stromboliPipelineBarrier(commandBuffer, 0, 0, 0, 1, &imageBarrier);
         }
 
+        if(i == graph->passCount -1) {
+            vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, graph->queryPools[0], 1);
+            graph->timestampCount++;
+        }
+
         vkEndCommandBuffer(commandBuffer);
     }
 
@@ -240,6 +272,14 @@ bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFen
     return true;
 }
 
+float renderGraphGetLastDuration(RenderGraph* graph) {
+    float result = 0.0f;
+    if(graph) {
+        result = graph->lastDuration;
+    }
+    return result;
+}
+
 void renderGraphDestroy(RenderGraph* graph, VkFence fence) {
     StromboliContext* context = graph->context;
 
@@ -257,6 +297,9 @@ void renderGraphDestroy(RenderGraph* graph, VkFence fence) {
 
     vkDestroyCommandPool(context->device, graph->commandPools[0], 0);
     vkDestroyCommandPool(context->device, graph->commandPools[1], 0);
+
+    vkDestroyQueryPool(context->device, graph->queryPools[0], 0);
+    vkDestroyQueryPool(context->device, graph->queryPools[1], 0);
 
     vkDestroySemaphore(context->device, graph->imageAcquireSemaphore, 0);
     vkDestroySemaphore(context->device, graph->imageReleaseSemaphore, 0);

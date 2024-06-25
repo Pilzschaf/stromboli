@@ -194,21 +194,7 @@ void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image
 		dependencyInfo.imageMemoryBarrierCount = 1;
 		dependencyInfo.pImageMemoryBarriers = &imageBarrier;
 		vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
-		/*
-		Vulkan Error: Validation Error: [ SYNC-HAZARD-WRITE-AFTER-WRITE ] Object 0: handle = 0x3b715500000000c5, name = Mipped voxel image, type = VK_OBJECT_TYPE_IMAGE; | MessageID = 0x5c0ec5d6 | vkCmdCopyBufferToImage: Hazard WRITE_AFTER_WRITE for dstImage VkImage 0x3b715500000000c5[Mipped voxel image], region 0. Access info (usage: SYNC_COPY_TRANSFER_WRITE, prior_usage: SYNC_IMAGE_LAYOUT_TRANSITION, write_barriers: 0, command: vkCmdPipelineBarrier2, seq_no: 1, reset_no: 2).
-		*/
-		//pipelineBarrier(commandBuffer, 0, 0, 0, 1, &imageBarrier);
 	}
-
-	/*VkBufferMemoryBarrier2 bufferBarrier = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2};
-	bufferBarrier.srcStageMask = VK_PIPELINE_STAGE_HOST_BIT;
-	bufferBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-	bufferBarrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	bufferBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-	bufferBarrier.buffer = uploadContext->scratch->buffer;
-	bufferBarrier.offset = 0;
-	bufferBarrier.size = VK_WHOLE_SIZE;
-	pipelineBarrier(commandBuffer, 0, 1, &bufferBarrier, 0, 0);*/
 
 	VkBufferImageCopy region = {0};
 	region.bufferOffset = scratchOffset;
@@ -230,14 +216,6 @@ void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image
 		imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 		imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 		vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, 0, 0, 0, 1, &imageBarrier);
-		
-		//image->lastLayout = finalLayout;
-		//image->lastAccess = VK_ACCESS_TRANSFER_WRITE_BIT;
-		//image->lastStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	} else {
-		//image->lastLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		//image->lastAccess = VK_ACCESS_TRANSFER_WRITE_BIT;
-		//image->lastStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 	}
 
 	if(uc.commandPool) {
@@ -416,7 +394,7 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 	createInfo.size = size;
 	createInfo.usage = usage;
 	
-	if(!(usage & VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR)) {
+	if(true || !(usage & VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR)) {
 		VmaAllocationCreateInfo allocInfo = {0};
 		allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 		vmaCreateBuffer(context->vmaAllocator, &createInfo, &allocInfo, &result.buffer, &result.allocation, 0);
@@ -621,11 +599,28 @@ void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliIma
 		}
 	}
 
-	//image->lastLayout = finalLayout;
-	//image->lastAccess = VK_ACCESS_TRANSFER_WRITE_BIT;
-	//image->lastStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-
 	if(uc.commandPool) {
 		destroyUploadContext(context, &uc);
 	}
+}
+
+VkSampler stromboliSamplerCreate(StromboliContext* context, bool linear) {
+	VkSampler result = 0;
+	VkFilter filter = linear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST; // Bilinear
+	VkSamplerMipmapMode mipmapMode = linear ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST; // Trilinear
+
+	VkSamplerCreateInfo createInfo = (VkSamplerCreateInfo){VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+	createInfo.magFilter = filter;
+	createInfo.minFilter = filter;
+	createInfo.mipmapMode = mipmapMode;
+	createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE; //TODO: Allow other modes
+	createInfo.addressModeV = createInfo.addressModeU;
+    createInfo.addressModeW = createInfo.addressModeU;
+	createInfo.mipLodBias = 0.0f;
+    createInfo.maxAnisotropy = 1.0f;
+    createInfo.minLod = -1000;
+    createInfo.maxLod = 1000;
+	vkCreateSampler(context->device, &createInfo, 0, &result);
+	
+	return result;
 }
