@@ -1,4 +1,5 @@
 #include "stromboli.h"
+#include <stromboli/stromboli_tracy.h>
 
 static inline void stromboliNameObject(StromboliContext* context, u64 handle, VkObjectType type, const char* name) {
 	if (vkSetDebugUtilsObjectNameEXT) {
@@ -113,7 +114,7 @@ typedef struct StromboliRenderSection {
 	struct StromboliRenderSectionTimingEntry timingEntries[MAX_SWAPCHAIN_IMAGES][MAX_TIMING_SECTIONS_PER_RENDER_SECTION];
 
 #ifdef TRACY_ENABLE
-	TracyVulkanScope tracyScopes[MAX_TIMING_SECTIONS_PER_RENDER_SECTION];
+	TracyStromboliScope tracyScopes[MAX_TIMING_SECTIONS_PER_RENDER_SECTION];
 #endif
 } StromboliRenderSection;
 
@@ -166,7 +167,7 @@ inline static void renderSectionBeginTimingSection(StromboliContext* context, St
 	section->timingEntries[frameIndex][timingEntryIndex].name = name;
 
 #ifdef TRACY_ENABLE
-	section->tracyScopes[timingEntryIndex] = createTracyVulkanScopeAllocSource( getTracyContext(), __LINE__, __FILE__, strlen( __FILE__ ), __FUNCTION__, strlen(__FUNCTION__), name, strlen(name), section->commandBuffers[frameIndex], true);
+	section->tracyScopes[timingEntryIndex] = createTracyStromboliScopeAllocSource( getTracyContext(), __LINE__, __FILE__, strlen( __FILE__ ), __FUNCTION__, strlen(__FUNCTION__), name, strlen(name), section->commandBuffers[frameIndex], true);
 #endif
 }
 
@@ -187,7 +188,7 @@ inline static void renderSectionEndTimingSection(StromboliContext* context, Stro
 	vkCmdWriteTimestamp(section->commandBuffers[frameIndex], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, section->timestampQueryPools[frameIndex], queryIndex);
 
 #ifdef TRACY_ENABLE
-	destroyTracyVulkanScope(&section->tracyScopes[timingEntryIndex]);
+	destroyTracyStromboliScope(&section->tracyScopes[timingEntryIndex]);
 #endif
 }
 
