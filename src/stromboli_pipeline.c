@@ -488,7 +488,8 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
     rasterizer.depthBiasEnable = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisampling = {VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
-    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.sampleShadingEnable = VK_TRUE;
+    multisampling.minSampleShading = 1.0f;
     if(parameters->multisampleCount) {
         multisampling.rasterizationSamples = parameters->multisampleCount;
     } else {

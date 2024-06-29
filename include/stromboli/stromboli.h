@@ -135,6 +135,7 @@ typedef struct StromboliImage {
     VkImageView view;
     u32 width, height, depth, mipCount;
     VkFormat format;
+    VkSampleCountFlagBits samples;
 
     VmaAllocation allocation;
 

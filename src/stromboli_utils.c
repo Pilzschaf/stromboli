@@ -60,6 +60,7 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 	if(depth > 1) {
 		imageType = VK_IMAGE_TYPE_3D;
 	}
+	VkSampleCountFlags samples = parameters->sampleCount == 0 ? VK_SAMPLE_COUNT_1_BIT : parameters->sampleCount;
 	u32 layerCount = parameters->layerCount == 0 ? 1 : parameters->layerCount;
 	{
 		VkImageCreateInfo createInfo = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
@@ -76,7 +77,7 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 		createInfo.tiling = parameters->tiling;
 		createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		createInfo.usage = usage;
-		createInfo.samples = parameters->sampleCount == 0 ? VK_SAMPLE_COUNT_1_BIT : parameters->sampleCount;
+		createInfo.samples = samples;
 		createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		//vkCreateImage(context->device, &createInfo, 0, &image->image);
 		VmaAllocationCreateInfo allocInfo = {0};
@@ -140,6 +141,7 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 	result.depth = depth;
 	result.mipCount = mipChainLength;
 	result.format = format;
+	result.samples = samples;
 	return result;
 }
 

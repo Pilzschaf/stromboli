@@ -8,6 +8,10 @@
 #endif
 STATIC_ASSERT(FINGERPRINT_BITS > 0);
 
+#ifndef TIMING_SECTION_COUNT
+#define TIMING_SECTION_COUNT 256
+#endif
+
 // Leaves all bits where the fingerprint is not present
 #define INVERSE_FINGERPRINT_MASK (0xFFFFFFFF >> FINGERPRINT_BITS)
 STATIC_ASSERT(IS_MASK(INVERSE_FINGERPRINT_MASK));
@@ -42,6 +46,9 @@ struct RenderAttachment {
     struct RenderGraphBuildPass* producer; 
     struct RenderGraphBuildPass* lastReader; // Can be null
     bool requiresClear;
+    bool resolveTarget; // This attachment is used as a resolve target and otherwise unused in the pass
+    RenderGraphImageHandle resolve; // The optional handle to an output where this attachment should be resolved to
+    VkResolveModeFlags resolveMode;
 };
 
 struct RenderGraphBuildPass {

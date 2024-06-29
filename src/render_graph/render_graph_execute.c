@@ -49,6 +49,10 @@ RenderGraphPass* beginRenderPass(RenderGraph* graph, RenderGraphPassHandle passH
             renderingInfo.pColorAttachments = attachments;
             for(u32 i = 0; i < pass->outputCount; ++i) {
                 struct RenderAttachment output = pass->outputs[i];
+                if(output.resolveTarget) {
+                    // Resolve targets are not directly used as attachments and therefore skipped
+                    continue;
+                }
                 StromboliImage* outputImage = &graph->images[output.imageHandle.handle];
                 if(i == 0) {
                     stromboliCmdSetViewportAndScissor(commandBuffer, outputImage->width, outputImage->height);
@@ -67,6 +71,14 @@ RenderGraphPass* beginRenderPass(RenderGraph* graph, RenderGraphPassHandle passH
                     .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 };
                 attachment->clearValue = graph->clearValues[output.imageHandle.handle];
+                if(output.resolve.handle) {
+                    StromboliImage* resolveTarget = renderPassGetOutputResource(pass, output.resolve);
+                    if(resolveTarget) {
+                        attachment->resolveMode = output.resolveMode;
+                        attachment->resolveImageView = resolveTarget->view;
+                        attachment->resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;   
+                    }
+                }
 
                 if(isDepthFormat(outputImage->format)) {
                     attachment->imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
@@ -157,8 +169,9 @@ bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFen
     }
 
     // Read timestamps
-    uint64_t timestamps[2] = { 0 };
+    uint64_t timestamps[TIMING_SECTION_COUNT * 2] = { 0 };
     u32 timestampCount = graph->timestampCount;
+    ASSERT(timestampCount <= ARRAY_COUNT(timestamps));
     if(timestampCount > 1) {
         VkResult timestampsValid = vkGetQueryPoolResults(context->device, graph->queryPools[0], 0, timestampCount, sizeof(timestamps), timestamps, sizeof(timestamps[0]), VK_QUERY_RESULT_64_BIT);
         if(timestampsValid == VK_SUCCESS) {

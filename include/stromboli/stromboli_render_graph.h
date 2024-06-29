@@ -33,21 +33,30 @@ typedef struct RenderGraphImageHandle {
     u32 handle;
 } RenderGraphImageHandle;
 
+struct RenderPassOutputParameters {
+    bool clear;
+    VkResolveModeFlags resolveMode;
+    VkClearValue clearValue;
+    VkSampleCountFlags sampleCount;
+};
+
 // Build
 RenderGraphBuilder* createRenderGraphBuilder(StromboliContext* context, MemoryArena* arena);
 RenderGraphPassHandle renderGraphAddGraphicsPass(RenderGraphBuilder* builder, String8 name);
 RenderGraphPassHandle renderGraphAddTransferPass(RenderGraphBuilder* builder, String8 name);
 RenderGraphPassHandle renderGraphAddComputePass(RenderGraphBuilder* builder, String8 name);
 RenderGraphPassHandle renderGraphAddRaytracePass(RenderGraphBuilder* builder, String8 name);
-RenderGraphImageHandle renderGraphCreateClearedFramebuffer(RenderGraphBuilder* builder, u32 width, u32 height, VkFormat format, VkClearValue clearColor);
-RenderGraphImageHandle renderPassAddClearedOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, u32 width, u32 height, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage, VkFormat format, VkClearValue clearColor);
-RenderGraphImageHandle renderPassAddOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, u32 width, u32 height, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage, VkFormat format);
+RenderGraphImageHandle renderGraphCreateClearedFramebuffer(RenderGraphBuilder* builder, u32 width, u32 height, VkFormat format, VkSampleCountFlags sampleCount, VkClearValue clearColor);
+
+RenderGraphImageHandle renderPassAddOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, u32 width, u32 height, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage, VkFormat format, struct RenderPassOutputParameters* parameters);
 RenderGraphImageHandle renderPassAddInput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, RenderGraphImageHandle input, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage);
-RenderGraphImageHandle renderPassAddInputOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, RenderGraphImageHandle input, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage);
+RenderGraphImageHandle renderPassAddInputOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, RenderGraphImageHandle input, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage, bool resolve);
+
 void renderPassSetExternal(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, bool external); // Marks the render pass as producing external resources. This makes sure the pass is not pruned when compiling
 VkFormat renderGraphImageGetFormat(RenderGraphBuilder* builder, RenderGraphImageHandle image);
 u32 renderGraphImageGetWidth(RenderGraphBuilder* builder, RenderGraphImageHandle image);
 u32 renderGraphImageGetHeight(RenderGraphBuilder* builder, RenderGraphImageHandle image);
+//RenderGraphImageHandle renderGraphImageResolve(RenderGraphBuilder* builder, RenderGraphImageHandle image); // Resolves a multi sampled image into a nonmultisampled image (or does nothing if input is not multisampled)
 
 // Compile
 RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHandle swapchainOutput, RenderGraph* oldGraph);

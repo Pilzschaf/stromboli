@@ -121,7 +121,6 @@ static void sortPasses(RenderGraphBuilder* builder, u32 passCount, RenderGraph* 
     }
     ASSERT(sortedCount <= passCount);
 
-
     // SortedPasses is acually in reverse order so reverse it...
     /*for(u32 i = 0; i < sortedCount / 2; ++i) {
         RenderGraphPass* tmp = sortedPasses[i];
@@ -224,7 +223,7 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
             passCount++;
         }
         sortPasses(builder, passCount, result);
-        ASSERT(result->passCount == passCount);
+        ASSERT(result->passCount <= passCount);
 
         // Create images
         u32 totalClearCount = 0;
@@ -238,7 +237,9 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
                 usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
             }
             
-            image->image = stromboliImageCreate(builder->context, image->image.width, image->image.height, image->format, usage, 0);
+            image->image = stromboliImageCreate(builder->context, image->image.width, image->image.height, image->format, usage, &(struct StromboliImageParameters) {
+                .sampleCount = image->image.samples,
+            });
             result->images[result->imageCount-i-1] = image->image;
             image = image->next;
         }
@@ -349,12 +350,10 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
             for(u32 i = 0; i < ARRAY_COUNT(result->queryPools); ++i) {
                 VkQueryPoolCreateInfo createInfo = { VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO };
                 createInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
-                //createInfo.queryCount = MAX_TIMING_SECTIONS_PER_RENDER_SECTION * 2;
-                createInfo.queryCount = 2;
+                createInfo.queryCount = TIMING_SECTION_COUNT * 2;
                 vkCreateQueryPool(builder->context->device, &createInfo, 0, &result->queryPools[i]);
             }
         }
-        //result->timestampCount = 0;
 
         // Allocate commandbuffers
         result->commandBufferCountPerFrame = MAX(result->passCount, oldCommandBufferCountPerFrame);

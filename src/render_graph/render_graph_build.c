@@ -112,7 +112,7 @@ static inline struct RenderGraphBuildPass* getPassFromHandle(RenderGraphBuilder*
     return pass;
 }
 
-RenderGraphImageHandle renderGraphCreateClearedFramebuffer(RenderGraphBuilder* builder, u32 width, u32 height, VkFormat format, VkClearValue clearColor) {
+RenderGraphImageHandle renderGraphCreateClearedFramebuffer(RenderGraphBuilder* builder, u32 width, u32 height, VkFormat format, VkSampleCountFlags sampleCount, VkClearValue clearColor) {
     struct RenderGraphBuildImage* result = ARENA_PUSH_STRUCT(builder->arena, struct RenderGraphBuildImage);
     if(result) {
         result->next = builder->imageSentinel.next;
@@ -120,6 +120,7 @@ RenderGraphImageHandle renderGraphCreateClearedFramebuffer(RenderGraphBuilder* b
         result->image.width = width;
         result->image.height = height;
         result->format = format;
+        result->image.samples = sampleCount;
         result->requiresClear = true;
         result->clearColor = clearColor;
     }
@@ -127,9 +128,13 @@ RenderGraphImageHandle renderGraphCreateClearedFramebuffer(RenderGraphBuilder* b
     return (RenderGraphImageHandle){builder->currentResourceIndex++};
 }
 
-RenderGraphImageHandle renderPassAddOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, u32 width, u32 height, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage, VkFormat format) {
+RenderGraphImageHandle renderPassAddOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, u32 width, u32 height, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage, VkFormat format, struct RenderPassOutputParameters* parameters) {
     struct RenderGraphBuildImage* result = ARENA_PUSH_STRUCT(builder->arena, struct RenderGraphBuildImage);
     struct RenderGraphBuildPass* pass = getPassFromHandle(builder, passHandle);
+    if(!parameters) {
+        static struct RenderPassOutputParameters defaultParameters = {0};
+        parameters = &defaultParameters;
+    }
 
     if(result) {
         result->producer = pass;
@@ -138,40 +143,33 @@ RenderGraphImageHandle renderPassAddOutput(RenderGraphBuilder* builder, RenderGr
         result->image.height = height;
         result->usage |= usage;
         result->format = format;
+        result->image.samples = parameters->sampleCount ? parameters->sampleCount : VK_SAMPLE_COUNT_1_BIT;
+        result->clearColor = parameters->clearValue;
+        result->requiresClear = false; // This is set elsewhere
         builder->imageSentinel.next = result;
         pass->outputs[pass->outputCount].layout = layout;
         pass->outputs[pass->outputCount].access = access;
         pass->outputs[pass->outputCount].stage = stage;
         pass->outputs[pass->outputCount].usage = usage;
+        pass->outputs[pass->outputCount].requiresClear = parameters->clear;
         pass->outputs[pass->outputCount++].imageHandle.handle = builder->currentResourceIndex;
     }
 
-    return (RenderGraphImageHandle){builder->currentResourceIndex++};
-}
+    RenderGraphImageHandle outputHandle = (RenderGraphImageHandle){builder->currentResourceIndex++};
 
-RenderGraphImageHandle renderPassAddClearedOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, u32 width, u32 height, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage, VkFormat format, VkClearValue clearColor) {
-    struct RenderGraphBuildImage* result = ARENA_PUSH_STRUCT(builder->arena, struct RenderGraphBuildImage);
-    struct RenderGraphBuildPass* pass = getPassFromHandle(builder, passHandle);
-
-    if(result) {
-        result->producer = pass;
-        result->next = builder->imageSentinel.next;
-        result->image.width = width;
-        result->image.height = height;
-        result->usage |= usage;
-        result->format = format;
-        result->clearColor = clearColor;
-        result->requiresClear = false;
-        builder->imageSentinel.next = result;
-        pass->outputs[pass->outputCount].layout = layout;
-        pass->outputs[pass->outputCount].access = access;
-        pass->outputs[pass->outputCount].stage = stage;
-        pass->outputs[pass->outputCount].usage = usage;
-        pass->outputs[pass->outputCount].requiresClear = true;
-        pass->outputs[pass->outputCount++].imageHandle.handle = builder->currentResourceIndex;
+    if(parameters->resolveMode && parameters->sampleCount > 0 && parameters->sampleCount != VK_SAMPLE_COUNT_1_BIT) {
+        // Not sure about usage and layout
+        VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        if(isDepthFormat(format)) {
+            usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        }
+        outputHandle = renderPassAddOutput(builder, passHandle, width, height, layout, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, usage, format, 0);
+        pass->outputs[pass->outputCount - 2].resolve = outputHandle;
+        pass->outputs[pass->outputCount - 2].resolveMode = parameters->resolveMode;
+        pass->outputs[pass->outputCount - 1].resolveTarget = true;
     }
 
-    return (RenderGraphImageHandle){builder->currentResourceIndex++};
+    return outputHandle;
 }
 
 RenderGraphImageHandle renderPassAddInput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, RenderGraphImageHandle inputHandle, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage) {
@@ -192,7 +190,7 @@ RenderGraphImageHandle renderPassAddInput(RenderGraphBuilder* builder, RenderGra
     return inputHandle;
 }
 
-RenderGraphImageHandle renderPassAddInputOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, RenderGraphImageHandle inputHandle, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage) {
+RenderGraphImageHandle renderPassAddInputOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, RenderGraphImageHandle inputHandle, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage, bool resolve) {
     struct RenderGraphBuildPass* pass = getPassFromHandle(builder, passHandle);
     struct RenderGraphBuildImage* input = getImageFromHandle(builder, inputHandle);
     if(!input->producer) {
@@ -200,12 +198,17 @@ RenderGraphImageHandle renderPassAddInputOutput(RenderGraphBuilder* builder, Ren
             if(pass->type != RENDER_GRAPH_PASS_TYPE_GRAPHICS) {
                 usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
             }
-            return renderPassAddClearedOutput(builder, passHandle, input->image.width, input->image.height, layout, access, stage, usage, input->format, input->clearColor);
-        } else {
-            return renderPassAddOutput(builder, passHandle, input->image.width, input->image.height, layout, access, stage, usage, input->format);
         }
-        
+        return renderPassAddOutput(builder, passHandle, input->image.width, input->image.height, layout, access, stage, usage, input->format, &(struct RenderPassOutputParameters){
+            .sampleCount = input->image.samples,
+            .clear = input->requiresClear,
+            .clearValue = input->clearColor,
+            .resolveMode = resolve ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE,
+        });
     }
+
+    //TODO: @Temporary Not supported yet
+    ASSERT(!resolve);
 
     input->usage |= usage;
     
@@ -259,4 +262,16 @@ u32 renderGraphImageGetHeight(RenderGraphBuilder* builder, RenderGraphImageHandl
         result = image->image.height;
     }
     return result;
+}
+
+RenderGraphImageHandle renderGraphImageResolve(RenderGraphBuilder* builder, RenderGraphImageHandle imageHandle) {
+    struct RenderGraphBuildImage* image = getImageFromHandle(builder, imageHandle);
+    if(image && image->image.samples && image->image.samples != VK_SAMPLE_COUNT_1_BIT) {
+        // We actually require a resovle
+        RenderGraphPassHandle resolvePass = renderGraphAddGraphicsPass(builder, STR8_LITERAL("__internal_resolve_pass"));
+        //TODO: General layout is also ok. Maybe prefer this if image is already in general layout
+        renderPassAddInput(builder, resolvePass, imageHandle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_RESOLVE_BIT, VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+        imageHandle = renderPassAddOutput(builder, resolvePass, image->image.width, image->image.height, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_RESOLVE_BIT, VK_IMAGE_USAGE_TRANSFER_DST_BIT, image->format, 0);
+    }
+    return imageHandle;
 }
