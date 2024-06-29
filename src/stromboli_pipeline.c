@@ -488,8 +488,8 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
     rasterizer.depthBiasEnable = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisampling = {VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
-    multisampling.sampleShadingEnable = VK_TRUE;
-    multisampling.minSampleShading = 1.0f;
+    multisampling.sampleShadingEnable = parameters->multiSampleShadingFactor ? VK_TRUE : VK_FALSE; // Seems like this is enforced by the shader if it uses sample interpolation setting
+    multisampling.minSampleShading = parameters->multiSampleShadingFactor;
     if(parameters->multisampleCount) {
         multisampling.rasterizationSamples = parameters->multisampleCount;
     } else {

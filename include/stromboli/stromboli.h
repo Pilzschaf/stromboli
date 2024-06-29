@@ -276,6 +276,7 @@ typedef struct StromboliGraphicsPipelineParameters {
     enum StromboliPrimitiveMode primitiveMode;
     enum StromboliCullMode cullMode;
     VkSampleCountFlags multisampleCount;
+    float multiSampleShadingFactor; // minSampleShading. Sample shading is disabled if equal to 0
     u32 additionalAttachmentCount;
     VkFormat* framebufferFormats;
     VkFormat depthFormat;
