@@ -264,6 +264,15 @@ u32 renderGraphImageGetHeight(RenderGraphBuilder* builder, RenderGraphImageHandl
     return result;
 }
 
+VkSampleCountFlags renderGraphImageGetSampleCount(RenderGraphBuilder* builder, RenderGraphImageHandle imageHandle) {
+    VkSampleCountFlags result = VK_SAMPLE_COUNT_1_BIT;
+    struct RenderGraphBuildImage* image = getImageFromHandle(builder, imageHandle);
+    if(image) {
+        result = image->image.samples;
+    }
+    return result;
+}
+
 RenderGraphImageHandle renderGraphImageResolve(RenderGraphBuilder* builder, RenderGraphImageHandle imageHandle) {
     struct RenderGraphBuildImage* image = getImageFromHandle(builder, imageHandle);
     if(image && image->image.samples && image->image.samples != VK_SAMPLE_COUNT_1_BIT) {

@@ -56,6 +56,7 @@ void renderPassSetExternal(RenderGraphBuilder* builder, RenderGraphPassHandle pa
 VkFormat renderGraphImageGetFormat(RenderGraphBuilder* builder, RenderGraphImageHandle image);
 u32 renderGraphImageGetWidth(RenderGraphBuilder* builder, RenderGraphImageHandle image);
 u32 renderGraphImageGetHeight(RenderGraphBuilder* builder, RenderGraphImageHandle image);
+VkSampleCountFlags renderGraphImageGetSampleCount(RenderGraphBuilder* builder, RenderGraphImageHandle imageHandle);
 //RenderGraphImageHandle renderGraphImageResolve(RenderGraphBuilder* builder, RenderGraphImageHandle image); // Resolves a multi sampled image into a nonmultisampled image (or does nothing if input is not multisampled)
 
 // Compile

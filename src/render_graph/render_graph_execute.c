@@ -88,7 +88,6 @@ RenderGraphPass* beginRenderPass(RenderGraph* graph, RenderGraphPassHandle passH
                 }
             }
             //stromboliCmdBeginRenderpass(pass->commandBuffer, &pass->renderpass, pass->width, pass->height, 0);
-            
             vkCmdBeginRendering(commandBuffer, &renderingInfo);
         } else {
             for(u32 i = 0; i < pass->outputCount; ++i) {
@@ -213,8 +212,11 @@ bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFen
             VkImageMemoryBarrier2KHR imageBarrier = {0};
             StromboliImage* finalImage = &graph->images[graph->finalImageHandle.handle];
             
+            
+
             VkImageMemoryBarrier2KHR imageBarriers[] = {
-                graph->finalImageBarrier,
+                //graph->finalImageBarrier,
+                stromboliCreateImageBarrier(graph->finalImageBarrier.image, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL),
                 stromboliCreateImageBarrier(image,
                     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED, 
                     VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL),
@@ -364,6 +366,16 @@ void renderGraphBuilderPrint(RenderGraphBuilder* builder) {
     }
 }
 
+static void printBarrier(VkImageMemoryBarrier2KHR barrier) {
+    printf("\t\tVkImage: %p\n", barrier.image);
+    printf("\t\tSource stage: %s\n", string_VkPipelineStageFlagBits2(barrier.srcStageMask));
+    printf("\t\tSource access: %s\n", string_VkAccessFlagBits2(barrier.srcAccessMask));
+    printf("\t\tOld layout: %s\n", string_VkImageLayout(barrier.oldLayout));
+    printf("\t\tDest stage: %s\n", string_VkPipelineStageFlagBits2(barrier.dstStageMask));
+    printf("\t\tDest access: %s\n", string_VkAccessFlagBits2(barrier.dstAccessMask));
+    printf("\t\tNew layout: %s\n", string_VkImageLayout(barrier.newLayout));
+}
+
 void renderGraphPrint(RenderGraph* graph) {
     for(u32 i = 0; i < graph->passCount * 2; ++i) {
         printf("Command buffer%u: %p\n", i, graph->commandBuffers[i]);
@@ -379,26 +391,14 @@ void renderGraphPrint(RenderGraph* graph) {
         printf("\tBarriers:\n");
         for(u32 i = 0; i < pass.imageBarrierCount; ++i) {
             VkImageMemoryBarrier2KHR barrier = pass.imageBarriers[i];
-            printf("\t\tVkImage: %p\n", barrier.image);
-            printf("\t\tSource stage: %s\n", string_VkPipelineStageFlagBits2(barrier.srcStageMask));
-            printf("\t\tSource access: %s\n", string_VkAccessFlagBits2(barrier.srcAccessMask));
-            printf("\t\tOld layout: %s\n", string_VkImageLayout(barrier.oldLayout));
-            printf("\t\tDest stage: %s\n", string_VkPipelineStageFlagBits2(barrier.dstStageMask));
-            printf("\t\tDest access: %s\n", string_VkAccessFlagBits2(barrier.dstAccessMask));
-            printf("\t\tNew layout: %s\n", string_VkImageLayout(barrier.newLayout));
+            printBarrier(barrier);
         }
 
         if(pass.afterClearBarrierCount) {
             printf("\tAfter clear barriers:\n");
             for(u32 i = 0; i < pass.afterClearBarrierCount; ++i) {
                 VkImageMemoryBarrier2KHR barrier = pass.afterClearBarriers[i];
-                printf("\t\tVkImage: %p\n", barrier.image);
-                printf("\t\tSource stage: %s\n", string_VkPipelineStageFlagBits2(barrier.srcStageMask));
-                printf("\t\tSource access: %s\n", string_VkAccessFlagBits2(barrier.srcAccessMask));
-                printf("\t\tOld layout: %s\n", string_VkImageLayout(barrier.oldLayout));
-                printf("\t\tDest stage: %s\n", string_VkPipelineStageFlagBits2(barrier.dstStageMask));
-                printf("\t\tDest access: %s\n", string_VkAccessFlagBits2(barrier.dstAccessMask));
-                printf("\t\tNew layout: %s\n", string_VkImageLayout(barrier.newLayout));
+                printBarrier(barrier);
             }
         }
 
@@ -413,6 +413,7 @@ void renderGraphPrint(RenderGraph* graph) {
             printf("\t\tFormat: %s\n", string_VkFormat(inputImage->format));
             printf("\t\tDimensions(WxHxD): %ux%ux%u\n", inputImage->width, inputImage->height, inputImage->depth);
             printf("\t\tMipLevels: %u\n", inputImage->mipCount);
+            printf("\t\tSamples: %s\n", string_VkSampleCountFlagBits(inputImage->samples));
         }
 
         printf("\tOutputs:\n");
@@ -426,10 +427,16 @@ void renderGraphPrint(RenderGraph* graph) {
             printf("\t\tFormat: %s\n", string_VkFormat(outputImage->format));
             printf("\t\tDimensions(WxHxD): %ux%ux%u\n", outputImage->width, outputImage->height, outputImage->depth);
             printf("\t\tMipLevels: %u\n", outputImage->mipCount);
+            printf("\t\tSamples: %s\n", string_VkSampleCountFlagBits(outputImage->samples));
             if(output.requiresClear) {
                 VkClearValue clearValue = graph->clearValues[output.imageHandle.handle];
                 printf("\t\tCleared with: (%f,%f,%f,%f)\n", clearValue.color.float32[0], clearValue.color.float32[1], clearValue.color.float32[2], clearValue.color.float32[3]);
             }
         }
+    }
+    if(graph->finalImageBarrier.image) {
+        printf("\tFinal barrier:\n");
+        VkImageMemoryBarrier2KHR barrier = graph->finalImageBarrier;
+        printBarrier(barrier);
     }
 }
