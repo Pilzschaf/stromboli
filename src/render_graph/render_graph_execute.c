@@ -211,12 +211,9 @@ bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFen
             // Layout transition
             VkImageMemoryBarrier2KHR imageBarrier = {0};
             StromboliImage* finalImage = &graph->images[graph->finalImageHandle.handle];
-            
-            
 
             VkImageMemoryBarrier2KHR imageBarriers[] = {
-                //graph->finalImageBarrier,
-                stromboliCreateImageBarrier(graph->finalImageBarrier.image, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL),
+                graph->finalImageBarrier,
                 stromboliCreateImageBarrier(image,
                     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED, 
                     VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL),
