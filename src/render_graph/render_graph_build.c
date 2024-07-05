@@ -190,7 +190,7 @@ RenderGraphImageHandle renderPassAddInput(RenderGraphBuilder* builder, RenderGra
     return inputHandle;
 }
 
-RenderGraphImageHandle renderPassAddInputOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, RenderGraphImageHandle inputHandle, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage, bool resolve) {
+RenderGraphImageHandle renderPassAddInputOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, RenderGraphImageHandle inputHandle, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage, VkResolveModeFlags resolve) {
     struct RenderGraphBuildPass* pass = getPassFromHandle(builder, passHandle);
     struct RenderGraphBuildImage* input = getImageFromHandle(builder, inputHandle);
     if(!input->producer) {
@@ -203,7 +203,7 @@ RenderGraphImageHandle renderPassAddInputOutput(RenderGraphBuilder* builder, Ren
             .sampleCount = input->image.samples,
             .clear = input->requiresClear,
             .clearValue = input->clearColor,
-            .resolveMode = resolve ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE,
+            .resolveMode = resolve,
         });
     }
 
