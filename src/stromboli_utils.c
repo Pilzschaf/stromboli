@@ -13,7 +13,8 @@ bool isDepthFormat(VkFormat format) {
 	return false;
 }
 
-static u32 findMemoryType(StromboliContext* context, u32 typeFilter, VkMemoryPropertyFlags memoryProperties) {
+u32 stromboliFindMemoryType(StromboliContext* context, u32 typeFilter, VkMemoryPropertyFlags memoryProperties) {
+	ASSERT(typeFilter);
 	VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
 	vkGetPhysicalDeviceMemoryProperties(context->physicalDevice, &deviceMemoryProperties);
 
@@ -34,7 +35,7 @@ static u32 findMemoryType(StromboliContext* context, u32 typeFilter, VkMemoryPro
 	return UINT32_MAX;
 }
 
-void stromboliUploadDataToBuffer(StromboliContext* context, StromboliBuffer* buffer, void* data, size_t size, StromboliUploadContext* uploadContext) {
+void stromboliUploadDataToBuffer(StromboliContext* context, StromboliBuffer* buffer, const void* data, size_t size, StromboliUploadContext* uploadContext) {
 	//void* mapping = 0;
 	ASSERT(buffer->mapped);
 	//vkMapMemory(context->device, buffer->memory, 0, size, 0, &mapping);
@@ -147,9 +148,12 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 
 void stromboliImageDestroy(StromboliContext* context, StromboliImage* image) {
 	vkDestroyImageView(context->device, image->view, 0);
-	//vkDestroyImage(context->device, image->image, 0);
-	//vkFreeMemory(context->device, image->memory, 0);
-	vmaDestroyImage(context->vmaAllocator, image->image, image->allocation);
+	if(image->allocation) {
+		vmaDestroyImage(context->vmaAllocator, image->image, image->allocation);
+	} else {
+		vkDestroyImage(context->device, image->image, 0);
+		//vkFreeMemory(context->device, image->memory, 0);
+	}
 }
 
 void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image, void* data, size_t size, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext) {
@@ -411,7 +415,7 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 		//ASSERT(memoryRequirements.alignment == 4);
 		//TODO: Has triggered so look into how to remove the branch
 
-		u32 memoryIndex = findMemoryType(context, memoryRequirements.memoryTypeBits, memoryProperties);
+		u32 memoryIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, memoryProperties);
 		ASSERT(memoryIndex != UINT32_MAX);
 
 		VkMemoryAllocateFlagsInfo allocateFlags = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO};

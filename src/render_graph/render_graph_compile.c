@@ -3,6 +3,7 @@
 #include "render_graph_definitions.inl"
 
 #include <grounded/memory/grounded_memory.h>
+#include <stdio.h>
 
 static inline struct RenderGraphBuildPass* getPassAtIndex(struct RenderGraphBuildPass* firstPass, u32 index) {
     struct RenderGraphBuildPass* result = firstPass;
@@ -139,6 +140,110 @@ static void sortPasses(RenderGraphBuilder* builder, u32 passCount, RenderGraph* 
     result->passCount = sortedCount;
 }
 
+StromboliImage renderGraphAllocateFramebuffer(RenderGraph* graph, StromboliContext* context, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage, VkSampleCountFlags samples) {
+    StromboliImage result = {0};
+
+    {
+        VkImageCreateInfo createInfo = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+		createInfo.imageType = VK_IMAGE_TYPE_2D;
+		createInfo.extent.width = width;
+		createInfo.extent.height = height;
+		createInfo.extent.depth = 1;
+		createInfo.mipLevels = 1;
+		createInfo.arrayLayers = 1;
+		createInfo.format = format;
+		createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+		createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		createInfo.usage = usage;
+		createInfo.samples = samples;
+		createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        vkCreateImage(context->device, &createInfo, 0, &result.image);
+    }
+
+    // Asking for requirements already requires image
+    VkImageMemoryRequirementsInfo2 memoryInfo = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2};
+	memoryInfo.image = result.image;
+	VkMemoryDedicatedRequirements dedicatedRequirements = {VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS};
+	VkMemoryRequirements2 imageMemoryRequirements = {VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
+	imageMemoryRequirements.pNext = &dedicatedRequirements;
+	vkGetImageMemoryRequirements2(context->device, &memoryInfo, &imageMemoryRequirements);
+    VkMemoryRequirements memoryRequirements = imageMemoryRequirements.memoryRequirements;
+
+    // Check if we have an available block. Otherwise allocate a new one!
+    struct RenderGraphMemoryBlock* memoryBlock = graph->firstBlock;
+    struct RenderGraphMemoryBlock** nextPointerLocation = &graph->firstBlock;
+    u32 memoryTypeIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    while(memoryBlock) {
+        if(memoryBlock->type == memoryTypeIndex) {
+            u64 memoryOffset = ALIGN_UP_POW2(memoryBlock->offset, memoryRequirements.alignment);
+            if(memoryOffset + memoryRequirements.size <= memoryBlock->size) {
+                // Enough space left
+                break;
+            }
+        }
+        nextPointerLocation = &memoryBlock->next;
+        memoryBlock = memoryBlock->next;
+    }
+    if(!memoryBlock) {
+        // Need to allocate a new memory block
+        printf("Allcoating new memory block for framebuffers\n");
+        ASSERT(*nextPointerLocation == 0);
+        VkMemoryAllocateInfo allocateInfo = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+        allocateInfo.allocationSize = MAX(memoryRequirements.size, MB(256));
+        allocateInfo.memoryTypeIndex = memoryTypeIndex;
+        memoryBlock = ARENA_PUSH_STRUCT(&graph->arena, struct RenderGraphMemoryBlock);
+        vkAllocateMemory(context->device, &allocateInfo, 0, &memoryBlock->memory);
+        memoryBlock->size = allocateInfo.allocationSize;
+        memoryBlock->offset = 0;
+        memoryBlock->type = memoryTypeIndex;
+        // Add to blocks
+        *nextPointerLocation = memoryBlock;
+    }
+    u64 memoryOffset = ALIGN_UP_POW2(memoryBlock->offset, memoryRequirements.alignment);
+    vkBindImageMemory(context->device, result.image, memoryBlock->memory, memoryOffset);
+    memoryBlock->offset = memoryOffset + memoryRequirements.size;
+
+    { // Create the image view
+        VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+        if(isDepthFormat(format)) {
+            aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+        }
+		VkImageViewCreateInfo createInfo = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+		createInfo.image = result.image;
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = format;
+		createInfo.subresourceRange.aspectMask = aspect;
+		createInfo.subresourceRange.levelCount = 1;
+		createInfo.subresourceRange.layerCount = 1;
+		vkCreateImageView(context->device, &createInfo, 0, &result.view);
+	}
+	result.width = width;
+	result.height = height;
+	result.depth = 1;
+	result.mipCount = 1;
+	result.format = format;
+	result.samples = samples;
+	return result;
+}
+
+static struct RenderGraphMemoryBlock* copyAndResetMemoryBlockList(MemoryArena* arena, struct RenderGraphMemoryBlock* firstBlock) {
+    struct RenderGraphMemoryBlock* result = 0;
+
+    struct RenderGraphMemoryBlock* memoryBlock = firstBlock;
+    struct RenderGraphMemoryBlock** nextPointerLocation = &result;
+    while(memoryBlock) {
+        struct RenderGraphMemoryBlock* newBlock = ARENA_PUSH_STRUCT_NO_CLEAR(arena, struct RenderGraphMemoryBlock);
+        MEMORY_COPY_STRUCT(newBlock, memoryBlock);
+        newBlock->next = 0;
+        newBlock->offset = 0;
+        *nextPointerLocation = newBlock;
+        nextPointerLocation = &newBlock->next;
+        memoryBlock = memoryBlock->next;
+    }
+
+    return result;
+}
+
 RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHandle swapchainOutputHandle, RenderGraph* oldGraph) {
     // We can use the builder arena as scratch here
     MemoryArena* scratch = builder->arena;
@@ -148,6 +253,7 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
     StromboliImage* imageDeleteQueue = 0;
     u32 imageDeleteCount = 0;
     RenderGraph* result = 0;
+    struct RenderGraphMemoryBlock* firstBlock = 0; 
     if(oldGraph) {
         // Move data from old graph to scratch memory
         oldCommandBuffers = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, oldGraph->commandBufferCountPerFrame*2, VkCommandBuffer);
@@ -158,6 +264,7 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
         imageDeleteCount = oldGraph->imageCount;
         MEMORY_COPY(imageDeleteQueue, oldGraph->images, sizeof(StromboliImage) * imageDeleteCount);
         ASSERT(!oldGraph->imageDeleteCount);
+        firstBlock = copyAndResetMemoryBlockList(scratch, oldGraph->firstBlock);
         arenaResetToMarker(oldGraph->resetMarker);
         result = oldGraph;
     } else {
@@ -199,6 +306,10 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
             swapchainOutput->isSwpachainOutput = true;
         }
 
+        if(firstBlock) {
+            result->firstBlock = copyAndResetMemoryBlockList(&result->arena, firstBlock);
+        }
+
         // Create semaphores if not already existing
         if(!result->imageAcquireSemaphore) {
             VkSemaphoreCreateInfo createInfo = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
@@ -237,9 +348,13 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
                 usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
             }
             
+            #if 1
+            image->image = renderGraphAllocateFramebuffer(result, builder->context, image->image.width, image->image.height, image->format, usage, image->image.samples);
+            #else
             image->image = stromboliImageCreate(builder->context, image->image.width, image->image.height, image->format, usage, &(struct StromboliImageParameters) {
                 .sampleCount = image->image.samples,
             });
+            #endif
             result->images[result->imageCount-i-1] = image->image;
             image = image->next;
         }

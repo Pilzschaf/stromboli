@@ -355,7 +355,7 @@ void stromboliPipelineDestroy(StromboliContext* context, StromboliPipeline* pipe
 StromboliPipeline stromboliPipelineRetrieveForFormat(StromboliMultiFormatPipeline multiFormatPipeline, VkFormat targetFormat);
 
 StromboliBuffer stromboliCreateBuffer(StromboliContext* context, u64 size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryProperties);
-void stromboliUploadDataToBuffer(StromboliContext* context, StromboliBuffer* buffer, void* data, size_t size, StromboliUploadContext* uploadContext);
+void stromboliUploadDataToBuffer(StromboliContext* context, StromboliBuffer* buffer, const void* data, size_t size, StromboliUploadContext* uploadContext);
 void stromboliDestroyBuffer(StromboliContext* context, StromboliBuffer* buffer);
 
 StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage, struct StromboliImageParameters* parameters);
@@ -381,6 +381,7 @@ u64 uploadToScratch(StromboliContext* context, StromboliUploadContext* uploadCon
 void submitUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext, u32 signalSemaphoreCount, VkSemaphore* signalSemaphores);
 void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext);
 bool isDepthFormat(VkFormat format);
+u32 stromboliFindMemoryType(StromboliContext* context, u32 typeFilter, VkMemoryPropertyFlags memoryProperties);
 VkSampler stromboliSamplerCreate(StromboliContext* context, bool linear);
 
 VkDeviceAddress getBufferDeviceAddress(StromboliContext* context, StromboliBuffer* buffer);

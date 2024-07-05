@@ -307,6 +307,12 @@ void renderGraphDestroy(RenderGraph* graph, VkFence fence) {
         graph->imageDeleteQueue = 0;
     }
 
+    struct RenderGraphMemoryBlock* memoryBlock = graph->firstBlock;
+    while(memoryBlock) {
+        vkFreeMemory(context->device, memoryBlock->memory, 0);
+        memoryBlock = memoryBlock->next;
+    }
+
     vkDestroyCommandPool(context->device, graph->commandPools[0], 0);
     vkDestroyCommandPool(context->device, graph->commandPools[1], 0);
 

@@ -63,6 +63,14 @@ struct RenderGraphBuildPass {
     bool external; // This indicates that this pass produces external output and must not be evicted when compiling
 };
 
+struct RenderGraphMemoryBlock {
+    struct RenderGraphMemoryBlock* next;
+    VkDeviceMemory memory;
+    u64 size;
+    u64 offset;
+    u32 type;
+};
+
 struct RenderGraphPass {
     String8 name;
     RenderGraph* graph;
@@ -113,6 +121,8 @@ struct RenderGraph {
     VkCommandPool commandPools[2];
     VkCommandBuffer* commandBuffers; // Each pass uses passIndex+commandBufferOffset as its pass
     u32 commandBufferOffset; // Switches between 0 and commandBufferCountPerFrame
+
+    struct RenderGraphMemoryBlock* firstBlock;
 };
 
 struct RenderGraphBuilder {
