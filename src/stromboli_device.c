@@ -408,6 +408,7 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
         enabledFeatures.fragmentStoresAndAtomics = parameters->fragmentStoresAndAtomicsFeature;
         enabledFeatures.independentBlend = parameters->independentBlendFeature;
         enabledFeatures.samplerAnisotropy = parameters->samplerAnisotropyFeature;
+        enabledFeatures.depthClamp = parameters->depthClampFeature;
 
         createInfo.queueCreateInfoCount = queueCreateInfoCount;
         createInfo.pQueueCreateInfos = queueCreateInfos;

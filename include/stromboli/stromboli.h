@@ -186,6 +186,7 @@ typedef struct StromboliInitializationParameters {
     bool enableApiDump;
 
     // Features
+    bool depthClampFeature;
     bool descriptorUpdateTemplate;
     bool disableSwapchain;
     bool calibratedTimestamps;
