@@ -148,7 +148,7 @@ static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena*
                     if(shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
                         shaderInfo->descriptorSets[setIndex].descriptorTypes[binding->binding] = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
                     } else {
-                        GROUNDED_LOG_WARNING("'dynamic' instance name for non uniform block.");
+                        //GROUNDED_LOG_WARNING("'dynamic' instance name for non uniform block.");
                     }
                 }
 
