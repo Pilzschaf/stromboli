@@ -17,7 +17,7 @@ VkBool32 VKAPI_CALL debugReportCallback(VkDebugUtilsMessageSeverityFlagBitsEXT s
 		printf("Vulkan Warning: %s\n", callbackData->pMessage);
         return VK_FALSE;
 	} else {
-        printf("Vulkan info: %s\n", callbackData->pMessage);
+        printf("Vulkan Info: %s\n", callbackData->pMessage);
         return VK_FALSE;
     }
 	return VK_FALSE;
@@ -102,7 +102,9 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
         if(count > 0 && platformInstanceExtensions) {
             const char** oldRequestedInstanceExtensions = requestedInstanceExtensions;
             requestedInstanceExtensions = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, requestedInstanceExtensionCount + count, const char*);
-            memcpy(requestedInstanceExtensions, oldRequestedInstanceExtensions, sizeof(const char*) * requestedInstanceExtensionCount);
+            if(requestedInstanceExtensionCount) {
+                memcpy(requestedInstanceExtensions, oldRequestedInstanceExtensions, sizeof(const char*) * requestedInstanceExtensionCount);
+            }
             memcpy(requestedInstanceExtensions + requestedInstanceExtensionCount, platformInstanceExtensions, sizeof(const char*) * count);
             requestedInstanceExtensionCount += count;
         }
@@ -240,7 +242,9 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
     #define MAX_ADDED_DEVICE_EXTENSION_COUNT 64
     u32 requestedDeviceExtensionCount = parameters->additionalDeviceExtensionCount;
     const char** requestedDeviceExtensions = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, parameters->additionalDeviceExtensionCount + MAX_ADDED_DEVICE_EXTENSION_COUNT, const char*);
-    memcpy(requestedDeviceExtensions, parameters->additionalDeviceExtensions, parameters->additionalDeviceExtensionCount * sizeof(const char*));
+    if(requestedDeviceExtensionCount) {
+        memcpy(requestedDeviceExtensions, parameters->additionalDeviceExtensions, parameters->additionalDeviceExtensionCount * sizeof(const char*));
+    }
 
     // First check which extensions we need
     if(!parameters->disableSwapchain) {
@@ -507,7 +511,7 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
         arenaEndTemp(temp);
     }
 
-#if 1
+#ifndef STROMBOLI_NO_VMA
     if(STROMBOLI_NO_ERROR(error)) { // Create vma allocator
         VmaVulkanFunctions vmaFunctions = {0};
         vmaFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
@@ -583,9 +587,12 @@ StromboliResult initStromboli(StromboliContext* context, StromboliInitialization
 }
 
 void shutdownStromboli(StromboliContext* context) {
+#ifndef STROMBOLI_NO_VMA
     if(context->vmaAllocator) {
         vmaDestroyAllocator(context->vmaAllocator);
     }
+#endif
+
     if(context->device) {
         vkDestroyDevice(context->device, 0);
     }

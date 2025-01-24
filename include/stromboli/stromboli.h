@@ -47,7 +47,9 @@ typedef struct StromboliContext {
     u32 computeQueueCount;
     u32 transferQueueCount;
 
+#ifndef STROMBOLI_NO_VMA
     VmaAllocator vmaAllocator;
+#endif
 } StromboliContext;
 
 typedef enum StromboliErrorCode {
@@ -137,7 +139,11 @@ typedef struct StromboliImage {
     VkFormat format;
     VkSampleCountFlagBits samples;
 
+#ifdef STROMBOLI_NO_VMA
+    VkDeviceMemory memory;
+#else
     VmaAllocation allocation;
+#endif
 
 } StromboliImage;
 
@@ -282,6 +288,8 @@ typedef struct StromboliGraphicsPipelineParameters {
     VkFormat* framebufferFormats;
     VkFormat depthFormat;
 
+    VkPipelineVertexInputStateCreateInfo* vertexDataFormat; // If 0 the format is generated via shader reflection
+
     StromboliSpecializationConstant* constants;
     u32 constantsCount;
 
@@ -340,9 +348,9 @@ typedef struct StromboliUploadContext {
 StromboliResult initStromboli(StromboliContext* context, StromboliInitializationParameters* parameters);
 void shutdownStromboli(StromboliContext* context);
 
-StromboliSwapchain stromboliSwapchainCreate(StromboliContext* context, VkSurfaceKHR surface, VkImageUsageFlags usage, u32 width, u32 height);
+StromboliSwapchain stromboliSwapchainCreate(StromboliContext* context, VkSurfaceKHR surface, VkImageUsageFlags usage, u32 width, u32 height, bool vsync);
 // Resizing of swapchain recreates images, image views etc. stored in the swapchain. Swapchain should not be in use anymore
-bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height);
+bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height, bool vsync);
 void stromboliSwapchainDestroy(StromboliContext* context, StromboliSwapchain* swapchain);
 
 StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 width, u32 height, u32 subpassCount, StromboliSubpass* subpasses);
@@ -361,7 +369,7 @@ void stromboliDestroyBuffer(StromboliContext* context, StromboliBuffer* buffer);
 
 StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage, struct StromboliImageParameters* parameters);
 void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image, void* data, u64 size, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext);
-void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliImage* image, void* data, u64 size, u32 width, u32 height, u32 depth, u32 mipLevel, u32 layer, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext);
+void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliImage* image, void* data, u64 size, u32 offsetX, u32 offsetY, u32 offsetZ, u32 width, u32 height, u32 depth, u32 mipLevel, u32 layer, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext);
 void stromboliImageDestroy(StromboliContext* context, StromboliImage* image);
 
 #define STROMBOLI_NAME_OBJECT_EXPLICIT(context, object, type, name) stromboliNameObject(context, INT_FROM_PTR(object), type, name)

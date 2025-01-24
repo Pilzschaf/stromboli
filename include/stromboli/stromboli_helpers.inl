@@ -32,14 +32,25 @@ static inline StromboliDescriptorInfo stromboliCreateImageDescriptor(VkImageLayo
 }
 
 static inline void stromboliPipelineBarrier(VkCommandBuffer commandBuffer, VkDependencyFlags dependencyFlags, u32 bufferBarrierCount, const VkBufferMemoryBarrier2KHR* bufferBarriers, u32 imageBarrierCount, const VkImageMemoryBarrier2KHR* imageBarriers) {
-    VkDependencyInfoKHR dependencyInfo = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR };
-    dependencyInfo.dependencyFlags = dependencyFlags;
-    dependencyInfo.bufferMemoryBarrierCount = bufferBarrierCount;
-	dependencyInfo.pBufferMemoryBarriers = bufferBarriers;
-	dependencyInfo.imageMemoryBarrierCount = imageBarrierCount;
-	dependencyInfo.pImageMemoryBarriers = imageBarriers;
+    if(vkCmdPipelineBarrier2KHR) {
+		VkDependencyInfoKHR dependencyInfo = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR };
+		dependencyInfo.dependencyFlags = dependencyFlags;
+		dependencyInfo.bufferMemoryBarrierCount = bufferBarrierCount;
+		dependencyInfo.pBufferMemoryBarriers = bufferBarriers;
+		dependencyInfo.imageMemoryBarrierCount = imageBarrierCount;
+		dependencyInfo.pImageMemoryBarriers = imageBarriers;
 
-    vkCmdPipelineBarrier2KHR(commandBuffer, &dependencyInfo);
+		vkCmdPipelineBarrier2KHR(commandBuffer, &dependencyInfo);
+	} else {
+		ASSERT(false);
+		/*
+		VkPipelineStageFlags srcStageMask = 0;
+		VkPipelineStageFlags dstStageMask = 0;
+		if(bufferBarrierCount) {
+			srcStageMask = bufferBarriers[0].srcStageMask;
+		}
+		vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, dependencyFlags, 0, 0, bufferBarrierCount, bufferBarriers, imageBarrierCount, imageBarriers);*/
+	}
 }
 
 static inline VkImageMemoryBarrier2 stromboliCreateImageBarrier(VkImage image, VkPipelineStageFlags2 srcStageMask, VkAccessFlags2 srcAccessMask, VkImageLayout oldLayout, VkPipelineStageFlags2 dstStageMask, VkAccessFlags2 dstAccessMask, VkImageLayout newLayout) {

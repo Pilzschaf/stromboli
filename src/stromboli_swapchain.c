@@ -5,7 +5,7 @@
 
 #include <stdio.h>
 
-static bool createSwapchain(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height) {
+static bool createSwapchain(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height, bool vsync) {
     const char* error = 0;
     VkResult result;
     VkSurfaceFormatKHR* availableFormats = 0;
@@ -104,7 +104,8 @@ static bool createSwapchain(StromboliContext* context, StromboliSwapchain* swapc
 			createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 			createInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
 			createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-			createInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+			VkPresentModeKHR presentMode = vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
+			createInfo.presentMode = presentMode;
 			createInfo.oldSwapchain = oldSwapchain ? oldSwapchain : 0;
 			result = vkCreateSwapchainKHR(context->device, &createInfo, 0, &swapchain->swapchain);
 			if(result != VK_SUCCESS) {
@@ -161,11 +162,11 @@ static bool createSwapchain(StromboliContext* context, StromboliSwapchain* swapc
     return !error;
 }
 
-StromboliSwapchain stromboliSwapchainCreate(StromboliContext* context, VkSurfaceKHR surface, VkImageUsageFlags usage, u32 width, u32 height) {
+StromboliSwapchain stromboliSwapchainCreate(StromboliContext* context, VkSurfaceKHR surface, VkImageUsageFlags usage, u32 width, u32 height, bool vsync) {
     StromboliSwapchain result = {0};
 	result.surface = surface;
 
-	createSwapchain(context, &result, usage, width, height);
+	createSwapchain(context, &result, usage, width, height, vsync);
 
 	return result;
 }
@@ -178,6 +179,6 @@ void stromboliSwapchainDestroy(StromboliContext* context, StromboliSwapchain* sw
     swapchain->swapchain = 0;
 }
 
-bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height) {
-    return createSwapchain(context, swapchain, usage, width, height);
+bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height, bool vsync) {
+	return createSwapchain(context, swapchain, usage, width, height, vsync);
 }

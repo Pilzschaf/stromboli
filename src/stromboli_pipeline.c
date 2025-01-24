@@ -329,7 +329,9 @@ static VkPipelineLayout createPipelineLayout(StromboliContext* context, ShaderIn
         }
         if(shaderInfo->descriptorSets[i].descriptorMask) {
             descriptorLayouts[i] = createSetLayout(context, &shaderInfo->descriptorSets[i]);
-            descriptorUpdateTemplates[i] = createDescriptorUpdateTemplate(context, &shaderInfo->descriptorSets[i], descriptorLayouts[i], i, bindPoint);
+            if(vkCreateDescriptorUpdateTemplateKHR) {
+                descriptorUpdateTemplates[i] = createDescriptorUpdateTemplate(context, &shaderInfo->descriptorSets[i], descriptorLayouts[i], i, bindPoint);
+            }
         } else {
             // We have to create a stub descriptor set layout
             VkDescriptorSetLayout layout;
@@ -406,6 +408,9 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
     // Merge the shader infos into a single combined info
     ShaderInfo shaderInfos[] = {vertexShaderInfo, fragmentShaderInfo};
     ShaderInfo combinedInfo = combineShaderInfos(PASS_ARRAY(shaderInfos));
+    if(parameters->vertexDataFormat) {
+        combinedInfo.vertexInputCreateInfo = *parameters->vertexDataFormat;
+    }
 
     // SpecializationConstants
     VkSpecializationInfo specialization;
@@ -802,6 +807,8 @@ void stromboliPipelineDestroy(StromboliContext* context, StromboliPipeline* pipe
             if(pipeline->updateTemplates[i] != (VkDescriptorUpdateTemplate)1) {
                 vkDestroyDescriptorUpdateTemplateKHR(context->device, pipeline->updateTemplates[i], 0);
             }
+        } else {
+            vkDestroyDescriptorSetLayout(context->device, pipeline->descriptorLayouts[i], 0);
         }
     }
     vkDestroyPipelineLayout(context->device, pipeline->layout, 0);

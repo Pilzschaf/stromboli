@@ -80,7 +80,9 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 		createInfo.usage = usage;
 		createInfo.samples = samples;
 		createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		//vkCreateImage(context->device, &createInfo, 0, &image->image);
+		#ifdef STROMBOLI_NO_VMA
+		vkCreateImage(context->device, &createInfo, 0, &result.image);
+		#else
 		VmaAllocationCreateInfo allocInfo = {0};
 		allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 		if(parameters->requireCPUAccess) {
@@ -88,14 +90,16 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 			allocInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
 		}
 		vmaCreateImage(context->vmaAllocator, &createInfo, &allocInfo, &result.image, &result.allocation, 0);
+		#endif
 	}
 
-	/*VkMemoryRequirements memoryRequirements;
-	#if 0
-	vkGetImageMemoryRequirements(context->device, image->image, &memoryRequirements);
+	#ifdef STROMBOLI_NO_VMA
+	VkMemoryRequirements memoryRequirements;
+	#if 1
+	vkGetImageMemoryRequirements(context->device, result.image, &memoryRequirements);
 	#else
 	VkImageMemoryRequirementsInfo2 memoryInfo = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2};
-	memoryInfo.image = image->image;
+	memoryInfo.image = result.image;
 	
 	VkMemoryDedicatedRequirements dedicatedRequirements = {VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS};
 
@@ -111,9 +115,10 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 	
 	VkMemoryAllocateInfo allocateInfo = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
 	allocateInfo.allocationSize = memoryRequirements.size;
-	allocateInfo.memoryTypeIndex = findMemoryType(context, memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	vkAllocateMemory(context->device, &allocateInfo, 0, &image->memory);
-	vkBindImageMemory(context->device, image->image, image->memory, 0);*/
+	allocateInfo.memoryTypeIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	vkAllocateMemory(context->device, &allocateInfo, 0, &result.memory);
+	vkBindImageMemory(context->device, result.image, result.memory, 0);
+	#endif
 
 	VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 	if(isDepthFormat(format)) {
@@ -148,12 +153,16 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 
 void stromboliImageDestroy(StromboliContext* context, StromboliImage* image) {
 	vkDestroyImageView(context->device, image->view, 0);
+#ifdef STROMBOLI_NO_VMA
+	vkDestroyImage(context->device, image->image, 0);
+	vkFreeMemory(context->device, image->memory, 0);
+#else
 	if(image->allocation) {
 		vmaDestroyImage(context->vmaAllocator, image->image, image->allocation);
 	} else {
 		vkDestroyImage(context->device, image->image, 0);
-		//vkFreeMemory(context->device, image->memory, 0);
 	}
+#endif
 }
 
 void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image, void* data, size_t size, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext) {
@@ -169,37 +178,40 @@ void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image
 	u64 scratchOffset = uploadToScratch(context, uploadContext, data, size);
 
 	{
-		/*VkImageMemoryBarrier imageBarrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-		imageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		imageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		imageBarrier.image = image->image;
-		imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		imageBarrier.subresourceRange.levelCount = 1;
-		imageBarrier.subresourceRange.layerCount = 1;
-		imageBarrier.srcAccessMask = 0;
-		imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, 0, 0, 0, 1, &imageBarrier);*/
-		VkImageMemoryBarrier2 imageBarrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
-		imageBarrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		imageBarrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		imageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		imageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		imageBarrier.image = image->image;
-		imageBarrier.subresourceRange = (VkImageSubresourceRange){
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.baseMipLevel = 0,
-			.levelCount = 1,
-			.baseArrayLayer = 0,
-			.layerCount = 1,
-		};
-		VkDependencyInfo dependencyInfo = {VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
-		dependencyInfo.imageMemoryBarrierCount = 1;
-		dependencyInfo.pImageMemoryBarriers = &imageBarrier;
-		vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
+		if(vkCmdPipelineBarrier2) {
+			VkImageMemoryBarrier2 imageBarrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
+			imageBarrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			imageBarrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			imageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			imageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			imageBarrier.image = image->image;
+			imageBarrier.subresourceRange = (VkImageSubresourceRange){
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1,
+			};
+			VkDependencyInfo dependencyInfo = {VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+			dependencyInfo.imageMemoryBarrierCount = 1;
+			dependencyInfo.pImageMemoryBarriers = &imageBarrier;
+			vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
+		} else {
+			VkImageMemoryBarrier imageBarrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+			imageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			imageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			imageBarrier.image = image->image;
+			imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			imageBarrier.subresourceRange.levelCount = 1;
+			imageBarrier.subresourceRange.layerCount = 1;
+			imageBarrier.srcAccessMask = 0;
+			imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, 0, 0, 0, 1, &imageBarrier);
+		}
 	}
 
 	VkBufferImageCopy region = {0};
@@ -230,13 +242,15 @@ void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image
 }
 
 void stromboliDestroyBuffer(StromboliContext* context, StromboliBuffer* buffer) {
+	#ifndef STROMBOLI_NO_VMA
 	if(buffer->mapped && !buffer->memory) {
 		vmaUnmapMemory(context->vmaAllocator, buffer->allocation);
 		// Unmapping should not be necessary?
 		//vkUnmapMemory(context->device, buffer->memory);
 	}
+	#endif
+	
 	buffer->mapped = 0;
-	//vkDestroyBuffer(context->device, buffer->buffer, 0);
 	// Assumes that the buffer owns its own memory block
 	if(buffer->memory) {
 		vkUnmapMemory(context->device, buffer->memory);
@@ -244,7 +258,11 @@ void stromboliDestroyBuffer(StromboliContext* context, StromboliBuffer* buffer) 
 		vkDestroyBuffer(context->device, buffer->buffer, 0);
 		return;
 	}
+#ifdef STROMBOLI_NO_VMA
+	vkDestroyBuffer(context->device, buffer->buffer, 0);
+#else
 	vmaDestroyBuffer(context->vmaAllocator, buffer->buffer, buffer->allocation);
+#endif
 }
 
 StromboliAccelerationStructure createAccelerationStructure(StromboliContext* context, u32 count, VkAccelerationStructureGeometryKHR* geometries, VkAccelerationStructureBuildRangeInfoKHR* buildRanges, bool allowUpdate, bool compact, StromboliUploadContext* uploadContext) {
@@ -399,44 +417,40 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 	VkBufferCreateInfo createInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
 	createInfo.size = size;
 	createInfo.usage = usage;
-	
-	if(true || !(usage & VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR)) {
-		VmaAllocationCreateInfo allocInfo = {0};
-		allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-		vmaCreateBuffer(context->vmaAllocator, &createInfo, &allocInfo, &result.buffer, &result.allocation, 0);
-		//vmaAllocateMemoryForBuffer(context->vmaAllocator, buffer->buffer, &allocInfo, &buffer->allocation, 0);
-		vmaMapMemory(context->vmaAllocator, result.allocation, &result.mapped);
+
+#ifdef STROMBOLI_NO_VMA
+	vkCreateBuffer(context->device, &createInfo, 0, &result.buffer);
+
+	VkMemoryRequirements memoryRequirements;
+	vkGetBufferMemoryRequirements(context->device, result.buffer, &memoryRequirements);
+	u32 memoryIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, memoryProperties);
+	ASSERT(memoryIndex != UINT32_MAX);
+
+	VkMemoryAllocateFlagsInfo allocateFlags = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO};
+	allocateFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+
+	VkMemoryAllocateInfo allocateInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+	//allocateInfo.pNext = &allocateFlags;
+	allocateInfo.allocationSize = memoryRequirements.size;
+	allocateInfo.memoryTypeIndex = memoryIndex;
+
+	vkAllocateMemory(context->device, &allocateInfo, 0, &result.memory);
+
+	vkBindBufferMemory(context->device, result.buffer, result.memory, 0);
+
+	// We have to check all 3 as we are only checking user requested and not the property of the returned memory
+	if((memoryProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)) {
+		vkMapMemory(context->device, result.memory, 0, VK_WHOLE_SIZE, 0, &result.mapped);
 	} else {
-		vkCreateBuffer(context->device, &createInfo, 0, &result.buffer);
-
-		VkMemoryRequirements memoryRequirements;
-		vkGetBufferMemoryRequirements(context->device, result.buffer, &memoryRequirements);
-		// Once this assert triggers, this workaround should not be needed anymore and the complete else branch can be deleted
-		//ASSERT(memoryRequirements.alignment == 4);
-		//TODO: Has triggered so look into how to remove the branch
-
-		u32 memoryIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, memoryProperties);
-		ASSERT(memoryIndex != UINT32_MAX);
-
-		VkMemoryAllocateFlagsInfo allocateFlags = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO};
-		allocateFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
-
-		VkMemoryAllocateInfo allocateInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-		allocateInfo.pNext = &allocateFlags;
-		allocateInfo.allocationSize = memoryRequirements.size;
-		allocateInfo.memoryTypeIndex = memoryIndex;
-
-		vkAllocateMemory(context->device, &allocateInfo, 0, &result.memory);
-
-		vkBindBufferMemory(context->device, result.buffer, result.memory, 0);
-
-		// We have to check all 3 as we are only checking user requested and not the property of the returned memory
-		if((memoryProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)) {
-			vkMapMemory(context->device, result.memory, 0, VK_WHOLE_SIZE, 0, &result.mapped);
-		} else {
-			result.mapped = 0;
-		}
+		result.mapped = 0;
 	}
+#else
+	VmaAllocationCreateInfo allocInfo = {0};
+	allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+	vmaCreateBuffer(context->vmaAllocator, &createInfo, &allocInfo, &result.buffer, &result.allocation, 0);
+	//vmaAllocateMemoryForBuffer(context->vmaAllocator, buffer->buffer, &allocInfo, &buffer->allocation, 0);
+	vmaMapMemory(context->vmaAllocator, result.allocation, &result.mapped);
+#endif
 
 	result.size = size;
 	return result;
@@ -567,7 +581,7 @@ void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploa
     uploadContext->scratchOffset = 0;
 }
 
-void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliImage* image, void* data, u64 size, u32 width, u32 height, u32 depth, u32 mipLevel, u32 layer, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext) {
+void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliImage* image, void* data, u64 size, u32 offsetX, u32 offsetY, u32 offsetZ, u32 width, u32 height, u32 depth, u32 mipLevel, u32 layer, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext) {
 	//TRACY_ZONE_HELPER(uploadDataToImageSubregion);
 
 	ASSERT((size % width * height * depth) == 0);
@@ -593,6 +607,7 @@ void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliIma
 	region.imageSubresource.layerCount = 1;
 	region.imageSubresource.baseArrayLayer = layer;
 	region.imageSubresource.mipLevel = mipLevel;
+	region.imageOffset = (VkOffset3D){offsetX, offsetY, offsetZ};
 	region.imageExtent = (VkExtent3D){width, height, depth};
 	vkCmdCopyBufferToImage(commandBuffer, uploadContext->scratch->buffer, image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
