@@ -422,7 +422,7 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
             //TODO: Once spirv reflect supports spec constants we can improve this by actually looking at the shader spec constant defines. We simply use i as index for now
             /*for(u32 j = 0; j < ARRAY_COUNT(combinedInfo.constants); ++j) {
                 if(combinedInfo.constants[j].name.size) {
-                    if(str8Compare(combinedInfo.constants[j].name, parameters->constants[i].name)) {
+                    if(str8IsEqual(combinedInfo.constants[j].name, parameters->constants[i].name)) {
                         index = j;
                         break;
                     }
