@@ -140,6 +140,7 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 		createInfo.subresourceRange.aspectMask = aspect;
 		createInfo.subresourceRange.levelCount = mipChainLength;
 		createInfo.subresourceRange.layerCount = layerCount;
+		createInfo.components = parameters->componentMapping;
 		vkCreateImageView(context->device, &createInfo, 0, &result.view);
 	}
 	result.width = width;
@@ -581,10 +582,10 @@ void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploa
     uploadContext->scratchOffset = 0;
 }
 
-void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliImage* image, void* data, u64 size, u32 offsetX, u32 offsetY, u32 offsetZ, u32 width, u32 height, u32 depth, u32 mipLevel, u32 layer, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext) {
+void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliImage* image, void* data, u64 size, u32 offsetX, u32 offsetY, u32 offsetZ, u32 width, u32 height, u32 depth, u32 inputStrideInPixels, u32 mipLevel, u32 layer, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext) {
 	//TRACY_ZONE_HELPER(uploadDataToImageSubregion);
 
-	ASSERT((size % width * height * depth) == 0);
+	ASSERT((size % (width * height * depth)) == 0);
 
 	// Make sure we have an upload context
 	StromboliUploadContext uc = ensureValidUploadContext(context, uploadContext);
@@ -602,6 +603,7 @@ void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliIma
 	}
 
 	VkBufferImageCopy region = {0};
+	region.bufferRowLength = inputStrideInPixels;
 	region.bufferOffset = scratchOffset;
 	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	region.imageSubresource.layerCount = 1;
