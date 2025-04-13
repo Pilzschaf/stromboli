@@ -349,9 +349,9 @@ typedef struct StromboliUploadContext {
 StromboliResult initStromboli(StromboliContext* context, StromboliInitializationParameters* parameters);
 void shutdownStromboli(StromboliContext* context);
 
-StromboliSwapchain stromboliSwapchainCreate(StromboliContext* context, VkSurfaceKHR surface, VkImageUsageFlags usage, u32 width, u32 height, bool vsync);
+StromboliSwapchain stromboliSwapchainCreate(StromboliContext* context, VkSurfaceKHR surface, VkImageUsageFlags usage, u32 width, u32 height, bool vsync, bool mailbox);
 // Resizing of swapchain recreates images, image views etc. stored in the swapchain. Swapchain should not be in use anymore
-bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height, bool vsync);
+bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height, bool vsync, bool mailbox);
 void stromboliSwapchainDestroy(StromboliContext* context, StromboliSwapchain* swapchain);
 
 StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 width, u32 height, u32 subpassCount, StromboliSubpass* subpasses);
