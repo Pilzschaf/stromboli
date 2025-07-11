@@ -427,8 +427,8 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 	u32 memoryIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, memoryProperties);
 	ASSERT(memoryIndex != UINT32_MAX);
 
-	VkMemoryAllocateFlagsInfo allocateFlags = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO};
-	allocateFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+	//VkMemoryAllocateFlagsInfo allocateFlags = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO};
+	//allocateFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
 
 	VkMemoryAllocateInfo allocateInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
 	//allocateInfo.pNext = &allocateFlags;

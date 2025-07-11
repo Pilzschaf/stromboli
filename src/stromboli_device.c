@@ -208,6 +208,7 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
         applicationInfo.apiVersion = apiVersion;
 
         VkInstanceCreateInfo createInfo = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
+        createInfo.pNext = &validationFeatures;
         createInfo.pApplicationInfo = &applicationInfo;
         createInfo.enabledLayerCount = enabledLayerCount;
         createInfo.ppEnabledLayerNames = enabledLayers;
