@@ -128,7 +128,7 @@ RenderGraphImageHandle renderGraphCreateClearedFramebuffer(RenderGraphBuilder* b
     return (RenderGraphImageHandle){builder->currentResourceIndex++};
 }
 
-RenderGraphImageHandle renderPassAddOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, u32 width, u32 height, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage, VkFormat format, struct RenderPassOutputParameters* parameters) {
+RenderGraphImageHandle renderPassAddOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, u32 width, u32 height, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags2 stage, VkImageUsageFlags usage, VkFormat format, struct RenderPassOutputParameters* parameters) {
     struct RenderGraphBuildImage* result = ARENA_PUSH_STRUCT(builder->arena, struct RenderGraphBuildImage);
     struct RenderGraphBuildPass* pass = getPassFromHandle(builder, passHandle);
     if(!parameters) {
@@ -172,7 +172,7 @@ RenderGraphImageHandle renderPassAddOutput(RenderGraphBuilder* builder, RenderGr
     return outputHandle;
 }
 
-RenderGraphImageHandle renderPassAddInput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, RenderGraphImageHandle inputHandle, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage) {
+RenderGraphImageHandle renderPassAddInput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, RenderGraphImageHandle inputHandle, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags2 stage, VkImageUsageFlags usage) {
     struct RenderGraphBuildPass* pass = getPassFromHandle(builder, passHandle);
     pass->inputs[pass->inputCount].layout = layout;
     pass->inputs[pass->inputCount].access = access;
@@ -190,7 +190,7 @@ RenderGraphImageHandle renderPassAddInput(RenderGraphBuilder* builder, RenderGra
     return inputHandle;
 }
 
-RenderGraphImageHandle renderPassAddInputOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, RenderGraphImageHandle inputHandle, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags stage, VkImageUsageFlags usage, VkResolveModeFlags resolve) {
+RenderGraphImageHandle renderPassAddInputOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, RenderGraphImageHandle inputHandle, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags2 stage, VkImageUsageFlags usage, VkResolveModeFlags resolve) {
     struct RenderGraphBuildPass* pass = getPassFromHandle(builder, passHandle);
     struct RenderGraphBuildImage* input = getImageFromHandle(builder, inputHandle);
     if(!input->producer) {

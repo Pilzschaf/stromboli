@@ -52,7 +52,7 @@ StromboliImage createCubemapFromEquirectangularPanorama(StromboliContext* contex
             }
         }
         
-        stromboliUploadDataToImageSubregion(context, &result, faceData, size, cubemapSize, cubemapSize, 1, 0, face, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, &uploadContext);
+        stromboliUploadDataToImageSubregion(context, &result, faceData, size, 0, 0, 0, cubemapSize, cubemapSize, 1, cubemapSize, 0, face, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, &uploadContext);
     }
 
     destroyUploadContext(context, &uploadContext);
@@ -79,7 +79,7 @@ StromboliImage createCubemapFromFaces(StromboliContext* context, VkFormat format
             data = stbi_load(str8GetCstr(scratch, filenames[face]), &width, &height, &comp, 4);
         }
         u64 size = width * height * 4;
-        stromboliUploadDataToImageSubregion(context, &result, data, size, width, height, 1, 0, face, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, &uploadContext);
+        stromboliUploadDataToImageSubregion(context, &result, data, size, 0, 0, 0, width, height, 1, width, 0, face, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, &uploadContext);
         stbi_image_free(data);
         data = 0;
     }

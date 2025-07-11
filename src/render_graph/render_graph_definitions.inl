@@ -39,7 +39,7 @@ typedef struct RenderGraphBuildImage {
 struct RenderAttachment {
     VkImageLayout layout; // Layout must be stored per attachment and not per image
     VkAccessFlags access;
-    VkPipelineStageFlags stage;
+    VkPipelineStageFlags2 stage;
     VkImageUsageFlags usage;
     RenderGraphImageHandle imageHandle;
     //TODO: Should probably store producer here for combined input+output framebuffer support (as producers are changing for a single image)
