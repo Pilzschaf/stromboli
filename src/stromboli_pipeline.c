@@ -54,6 +54,7 @@ static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena*
     SpvReflectShaderModule reflectModule;
     SpvReflectResult error = spvReflectCreateShaderModule(dataSize, data, &reflectModule);
     ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
+    (void)error;
 
     groundedFreeFileImmutable(data, dataSize);
     data = 0;
