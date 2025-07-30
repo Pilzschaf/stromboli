@@ -49,7 +49,7 @@ VkDeviceAddress getBufferDeviceAddress(StromboliContext* context, StromboliBuffe
     return vkGetBufferDeviceAddress(context->device, &addressInfo);
 }
 
-StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage, struct StromboliImageParameters* parameters) {
+StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage, struct StromboliImageParameters* parameters, StromboliAllocationContext* allocationContext) {
 	StromboliImage result = {0};
 	if(!parameters) {
 		static struct StromboliImageParameters defaultParameters = {0};
@@ -116,8 +116,14 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 	VkMemoryAllocateInfo allocateInfo = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
 	allocateInfo.allocationSize = memoryRequirements.size;
 	allocateInfo.memoryTypeIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	vkAllocateMemory(context->device, &allocateInfo, 0, &result.memory);
-	vkBindImageMemory(context->device, result.image, result.memory, 0);
+	VkDeviceSize memoryOffset = 0;
+	if(allocationContext) {
+		result.memory = allocationContext->allocate(allocationContext, memoryRequirements, &memoryOffset, 0);
+		result.allocator = allocationContext;
+	} else {
+		vkAllocateMemory(context->device, &allocateInfo, 0, &result.memory);
+	}
+	vkBindImageMemory(context->device, result.image, result.memory, memoryOffset);
 	#endif
 
 	VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -156,7 +162,13 @@ void stromboliImageDestroy(StromboliContext* context, StromboliImage* image) {
 	vkDestroyImageView(context->device, image->view, 0);
 #ifdef STROMBOLI_NO_VMA
 	vkDestroyImage(context->device, image->image, 0);
-	vkFreeMemory(context->device, image->memory, 0);
+	if(image->allocator) {
+		image->allocator->deallocate(image->allocator, image->memory);
+		image->memory = 0;
+	}
+	if(image->memory) {
+		vkFreeMemory(context->device, image->memory, 0);
+	}
 #else
 	if(image->allocation) {
 		vmaDestroyImage(context->vmaAllocator, image->image, image->allocation);
@@ -253,6 +265,10 @@ void stromboliDestroyBuffer(StromboliContext* context, StromboliBuffer* buffer) 
 	
 	buffer->mapped = 0;
 	// Assumes that the buffer owns its own memory block
+	if(buffer->allocator) {
+		buffer->allocator->deallocate(buffer->allocator, buffer->memory);
+		buffer->memory = 0;
+	}
 	if(buffer->memory) {
 		vkUnmapMemory(context->device, buffer->memory);
 		vkFreeMemory(context->device, buffer->memory, 0);
@@ -305,7 +321,7 @@ StromboliAccelerationStructure createAccelerationStructure(StromboliContext* con
     sizeInfo.accelerationStructureSize = ALIGN_UP_POW2(sizeInfo.accelerationStructureSize, 256);
     sizeInfo.buildScratchSize = ALIGN_UP_POW2(sizeInfo.buildScratchSize, asProperties.minAccelerationStructureScratchOffsetAlignment);
 
-    result.accelerationStructureBuffer = stromboliCreateBuffer(context, sizeInfo.accelerationStructureSize, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    result.accelerationStructureBuffer = stromboliCreateBuffer(context, sizeInfo.accelerationStructureSize, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0);
     {
         VkAccelerationStructureCreateInfoKHR createInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
         createInfo.type = accelerationStructureType;
@@ -315,7 +331,7 @@ StromboliAccelerationStructure createAccelerationStructure(StromboliContext* con
     }
     // Scratch buffer to hold temporary data for the acceleration structure builder
 	//TODO: Must ensure some minimal alignment. Currently using VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR to ensure this in a simple way
-    StromboliBuffer scratchBuffer = stromboliCreateBuffer(context, sizeInfo.buildScratchSize, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    StromboliBuffer scratchBuffer = stromboliCreateBuffer(context, sizeInfo.buildScratchSize, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0);
     VkDeviceAddress scratchAddress = getBufferDeviceAddress(context, &scratchBuffer);
     buildInfo.dstAccelerationStructure = result.accelerationStructure;
     buildInfo.scratchData.deviceAddress = getBufferDeviceAddress(context, &scratchBuffer);
@@ -351,7 +367,7 @@ StromboliAccelerationStructure createAccelerationStructure(StromboliContext* con
 		// Create compact version of AS
 		VkAccelerationStructureKHR compactedAccelerationStructure = {0};
 		StromboliBuffer compactedAccelerationStructureBuffer = {0};
-		compactedAccelerationStructureBuffer = stromboliCreateBuffer(context, compactSize, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		compactedAccelerationStructureBuffer = stromboliCreateBuffer(context, compactSize, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0);
 		VkAccelerationStructureCreateInfoKHR asCreateInfo = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR};
 		asCreateInfo.size = compactSize;
 		asCreateInfo.type = accelerationStructureType;
@@ -413,7 +429,7 @@ StromboliUploadContext createUploadContext(StromboliContext* context, StromboliQ
     return result;
 }
 
-StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryProperties) {
+StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryProperties, StromboliAllocationContext* allocationContext) {
 	StromboliBuffer result = {0};
 	VkBufferCreateInfo createInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
 	createInfo.size = size;
@@ -435,15 +451,23 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 	allocateInfo.allocationSize = memoryRequirements.size;
 	allocateInfo.memoryTypeIndex = memoryIndex;
 
-	vkAllocateMemory(context->device, &allocateInfo, 0, &result.memory);
+	VkDeviceSize memoryOffset = 0;
+	if(allocationContext) {
+		result.allocator = allocationContext;
+		result.memory = allocationContext->allocate(allocationContext, memoryRequirements, &memoryOffset, &result.mapped);
+	} else {
+		vkAllocateMemory(context->device, &allocateInfo, 0, &result.memory);
+	}
 
-	vkBindBufferMemory(context->device, result.buffer, result.memory, 0);
+	vkBindBufferMemory(context->device, result.buffer, result.memory, memoryOffset);
 
 	// We have to check all 3 as we are only checking user requested and not the property of the returned memory
-	if((memoryProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)) {
-		vkMapMemory(context->device, result.memory, 0, VK_WHOLE_SIZE, 0, &result.mapped);
-	} else {
-		result.mapped = 0;
+	if(!result.mapped) {
+		if((memoryProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)) {
+			vkMapMemory(context->device, result.memory, 0, VK_WHOLE_SIZE, 0, &result.mapped);
+		} else {
+			result.mapped = 0;
+		}
 	}
 #else
 	VmaAllocationCreateInfo allocInfo = {0};
@@ -512,7 +536,7 @@ u64 tryUploadToScratch(StromboliContext* context, StromboliUploadContext* upload
 	// If buffer is not created yet, create it!
 	if(!uploadContext->scratch) {
 		uploadContext->scratch = &uploadContext->ownedBuffer;
-		*uploadContext->scratch = stromboliCreateBuffer(context, ALIGN_UP_POW2(size, 4096), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+		*uploadContext->scratch = stromboliCreateBuffer(context, MAX(MB(1), ALIGN_UP_POW2(size, 4096)), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, 0);
 		STROMBOLI_NAME_OBJECT_EXPLICIT(context, uploadContext->ownedBuffer.buffer, VK_OBJECT_TYPE_BUFFER, "Upload context scratch buffer");
 		uploadContext->flags |= STROMBOLI_UPLOAD_CONTEXT_OWNS_BUFFER;
 	}
@@ -646,4 +670,69 @@ VkSampler stromboliSamplerCreate(StromboliContext* context, bool linear) {
 	vkCreateSampler(context->device, &createInfo, 0, &result);
 	
 	return result;
+}
+
+static VkDeviceMemory stromboliArenaAllocatorAllocate(StromboliAllocationContext* context, VkMemoryRequirements memoryRequirements, VkDeviceSize* outOffset, void** mapped) {
+	StromboliArenaAllocator* allocator = (StromboliArenaAllocator*)context;
+	VkDeviceMemory result = {0};
+	u64 offset = 0;
+	ASSUME(allocator) {
+		//u32 memoryTypeIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		//ASSERT(memoryTypeIndex == allocator.memoryTypeIndex);
+		result = allocator->memory;
+		offset = allocator->currentOffset;
+		allocator->currentOffset += memoryRequirements.size;
+
+		//TODO: Get actual alignment requirements
+		u64 alignment = 65536;
+		allocator->currentOffset = ALIGN_UP_POW2(allocator->currentOffset, alignment);
+	}
+
+	ASSUME(outOffset) {
+		*outOffset = offset;
+	}
+	if(mapped) {
+		ASSERT(allocator->mapped);
+		*mapped = (u8*)allocator->mapped + offset;
+	}
+	return result;
+}
+
+static void stromboliArenaAllocatorDeallocate(StromboliAllocationContext* context, VkDeviceMemory memory) {
+	// Noop
+}
+
+StromboliArenaAllocator stromboliCreateArenaAllocator(StromboliContext* context, u32 memoryProperties, u64 size) {
+	StromboliArenaAllocator result = {0};
+	result.allocationContext.allocate = &stromboliArenaAllocatorAllocate;
+	result.allocationContext.deallocate = &stromboliArenaAllocatorDeallocate;
+	VkMemoryAllocateInfo allocationInfo = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+	if(!size) {
+		size = MB(1);
+	}
+	allocationInfo.allocationSize = size;
+	u32 memoryTypeBits = memoryProperties;
+	allocationInfo.memoryTypeIndex = stromboliFindMemoryType(context, memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	result.memoryTypeIndex = allocationInfo.memoryTypeIndex;
+	vkAllocateMemory(context->device, &allocationInfo, 0, &result.memory);
+	
+	// We have to check all 3 as we are only checking user requested and not the property of the returned memory
+	if((memoryProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)) {
+		vkMapMemory(context->device, result.memory, 0, VK_WHOLE_SIZE, 0, &result.mapped);
+	}
+
+	return result;
+}
+
+void stromboliFreeArenaAllocator(StromboliContext* context, StromboliArenaAllocator* allocator) {
+	ASSUME(allocator && context) {
+		if(allocator->mapped) {
+			vkUnmapMemory(context->device, allocator->memory);
+			allocator->mapped = 0;
+		}
+		if(allocator->memory) {
+			vkFreeMemory(context->device, allocator->memory, 0);
+			allocator->memory = 0;
+		}
+	}
 }

@@ -3,7 +3,6 @@
 
 #include <grounded/string/grounded_string.h>
 #include <volk/volk.h>
-#include <vk_mem_alloc.h>
 
 #define STROMBOLI_SUCCESS() ((StromboliResult){0})
 #define STROMBOLI_MAKE_ERROR(code, text) ((StromboliResult){code, STR8_LITERAL(text)})
@@ -82,7 +81,7 @@ typedef struct StromboliBuffer {
 	VkDeviceMemory memory;
     u64 size;
     void* mapped; // If this buffer is host visible this points to the buffer data
-    VmaAllocation allocation;
+    struct StromboliAllocationContext* allocator;
 } StromboliBuffer;
 
 enum StromboliPipelineType {
@@ -139,12 +138,8 @@ typedef struct StromboliImage {
     VkFormat format;
     VkSampleCountFlagBits samples;
 
-#ifdef STROMBOLI_NO_VMA
     VkDeviceMemory memory;
-#else
-    VmaAllocation allocation;
-#endif
-
+    struct StromboliAllocationContext* allocator;
 } StromboliImage;
 
 struct StromboliImageParameters {
@@ -194,16 +189,22 @@ typedef struct StromboliInitializationParameters {
 
     // Features
     bool depthClampFeature;
+    bool shaderInt64;
     bool descriptorUpdateTemplate;
     bool disableSwapchain;
     bool calibratedTimestamps;
     bool sampleRateShadingFeature;
     bool fillModeNonSolidFeature;
     bool fragmentStoresAndAtomicsFeature;
+    bool vertexPipelineStoresAndAtomicsFeature;
     bool independentBlendFeature;
     bool samplerAnisotropyFeature;
     bool bufferDeviceAddress;
+    bool storageBuffer8BitAccess;
     bool scalarBlockLayout;
+    bool timelineSemaphore;
+    bool vulkanMemoryModel;
+    bool vulkanMemoryModelDeviceScope;
     bool dynamicRendering;
     bool dynamicRenderingUnusedAttachments;
     bool synchronization2;
@@ -346,6 +347,21 @@ typedef struct StromboliUploadContext {
     u32 flags;
 } StromboliUploadContext;
 
+typedef struct StromboliAllocationContext {
+    // mapped is optional
+    VkDeviceMemory (*allocate)(struct StromboliAllocationContext* allocator, VkMemoryRequirements memoryRequirements, VkDeviceSize* outOffset, void** mapped);
+    void (*deallocate)(struct StromboliAllocationContext* allocator, VkDeviceMemory memory);
+} StromboliAllocationContext;
+
+typedef struct StromboliArenaAllocator {
+    StromboliAllocationContext allocationContext;
+    VkDeviceMemory memory;
+    u64 currentOffset;
+    u64 size;
+    u32 memoryTypeIndex;
+    void* mapped;
+} StromboliArenaAllocator;
+
 StromboliResult initStromboli(StromboliContext* context, StromboliInitializationParameters* parameters);
 void shutdownStromboli(StromboliContext* context);
 
@@ -364,11 +380,11 @@ StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct Str
 void stromboliPipelineDestroy(StromboliContext* context, StromboliPipeline* pipeline);
 StromboliPipeline stromboliPipelineRetrieveForFormat(StromboliMultiFormatPipeline multiFormatPipeline, VkFormat targetFormat);
 
-StromboliBuffer stromboliCreateBuffer(StromboliContext* context, u64 size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryProperties);
+StromboliBuffer stromboliCreateBuffer(StromboliContext* context, u64 size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryProperties, StromboliAllocationContext* allocationContext);
 void stromboliUploadDataToBuffer(StromboliContext* context, StromboliBuffer* buffer, const void* data, size_t size, StromboliUploadContext* uploadContext);
 void stromboliDestroyBuffer(StromboliContext* context, StromboliBuffer* buffer);
 
-StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage, struct StromboliImageParameters* parameters);
+StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage, struct StromboliImageParameters* parameters, StromboliAllocationContext* allocationContext);
 void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image, void* data, u64 size, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext);
 void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliImage* image, void* data, u64 size, u32 offsetX, u32 offsetY, u32 offsetZ, u32 width, u32 height, u32 depth, u32 inputStrideInPixels, u32 mipLevel, u32 layer, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext);
 void stromboliImageDestroy(StromboliContext* context, StromboliImage* image);
@@ -393,6 +409,9 @@ void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploa
 bool isDepthFormat(VkFormat format);
 u32 stromboliFindMemoryType(StromboliContext* context, u32 typeFilter, VkMemoryPropertyFlags memoryProperties);
 VkSampler stromboliSamplerCreate(StromboliContext* context, bool linear);
+
+StromboliArenaAllocator stromboliCreateArenaAllocator(StromboliContext* context, u32 memoryProperties, u64 size);
+void stromboliFreeArenaAllocator(StromboliContext* context, StromboliArenaAllocator* allocator);
 
 VkDeviceAddress getBufferDeviceAddress(StromboliContext* context, StromboliBuffer* buffer);
 StromboliAccelerationStructure createAccelerationStructure(StromboliContext* context, u32 count, VkAccelerationStructureGeometryKHR* geometries, VkAccelerationStructureBuildRangeInfoKHR* buildRanges, bool allowUpdate, bool compact, StromboliUploadContext* uploadContext);

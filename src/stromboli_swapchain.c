@@ -5,11 +5,16 @@
 
 #include <stdio.h>
 
+// https://github.com/KhronosGroup/Vulkan-Samples/tree/main/samples/api/swapchain_recreation
+
 static bool createSwapchain(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height, bool vsync, bool mailbox) {
     const char* error = 0;
     VkResult result;
     VkSurfaceFormatKHR* availableFormats = 0;
     u32 numFormats = 0;
+	VkPresentModeKHR* availablePresentModes = 0;
+	u32 numPresentModes = 0;
+	bool supportsMailbox = false;
 	VkSwapchainKHR oldSwapchain = swapchain->swapchain;
 	bool skipDestroyOnError = false;
 
@@ -51,6 +56,25 @@ static bool createSwapchain(StromboliContext* context, StromboliSwapchain* swapc
 			result = vkGetPhysicalDeviceSurfaceFormatsKHR(context->physicalDevice, swapchain->surface, &numFormats, availableFormats);
 			if (numFormats <= 0 || result != VK_SUCCESS) {
 				error = "No surface formats available";
+			}
+		}
+	}
+
+	if(!error) {
+		result = vkGetPhysicalDeviceSurfacePresentModesKHR(context->physicalDevice, swapchain->surface, &numPresentModes, 0);
+		if(numPresentModes <= 0 || result != VK_SUCCESS) {
+			error = "Could not query device surface present modes";
+		} else {
+			availablePresentModes = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, numPresentModes, VkPresentModeKHR);
+			result = vkGetPhysicalDeviceSurfacePresentModesKHR(context->physicalDevice, swapchain->surface, &numPresentModes, availablePresentModes);
+			if (numPresentModes <= 0 || result != VK_SUCCESS) {
+				error = "No surface present modes available";
+			} else {
+				for(u32 i = 0; i < numPresentModes; ++i) {
+					if(availablePresentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+						supportsMailbox = true;
+					}
+				}
 			}
 		}
 	}
@@ -105,7 +129,7 @@ static bool createSwapchain(StromboliContext* context, StromboliSwapchain* swapc
 			createInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
 			createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 			VkPresentModeKHR presentMode = vsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
-			if(mailbox) {
+			if(mailbox && supportsMailbox) {
 				presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
 			}
 			createInfo.presentMode = presentMode;

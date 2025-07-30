@@ -761,7 +761,7 @@ StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct Str
     vkGetRayTracingShaderGroupHandlesKHR(context->device, result.pipeline, 0, sbtHandleCount, cpuDataSize, cpuShaderHandleStorage);
     
     u32 sbtSize = (u32)(result.raytracing.sbtRayGenRegion.size + result.raytracing.sbtMissRegion.size + result.raytracing.sbtHitRegion.size + result.raytracing.sbtCallableRegion.size);
-    result.raytracing.sbtBuffer = stromboliCreateBuffer(context, sbtSize, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    result.raytracing.sbtBuffer = stromboliCreateBuffer(context, sbtSize, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
     
     // Setup device addresses for each sbt entry
     const VkDeviceAddress sbtStartAddress = getBufferDeviceAddress(context, &result.raytracing.sbtBuffer);

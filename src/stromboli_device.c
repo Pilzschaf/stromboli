@@ -411,9 +411,11 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
         enabledFeatures.sampleRateShading = parameters->sampleRateShadingFeature;
         enabledFeatures.fillModeNonSolid = parameters->fillModeNonSolidFeature;
         enabledFeatures.fragmentStoresAndAtomics = parameters->fragmentStoresAndAtomicsFeature;
+        enabledFeatures.vertexPipelineStoresAndAtomics = parameters->vertexPipelineStoresAndAtomicsFeature;
         enabledFeatures.independentBlend = parameters->independentBlendFeature;
         enabledFeatures.samplerAnisotropy = parameters->samplerAnisotropyFeature;
         enabledFeatures.depthClamp = parameters->depthClampFeature;
+        enabledFeatures.shaderInt64 = parameters->shaderInt64;
 
         createInfo.queueCreateInfoCount = queueCreateInfoCount;
         createInfo.pQueueCreateInfos = queueCreateInfos;
@@ -439,6 +441,10 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
             features12.descriptorBindingStorageBufferUpdateAfterBind = parameters->descriptorBindingStorageBufferUpdateAfterBind;
             features12.descriptorBindingStorageImageUpdateAfterBind = parameters->descriptorBindingStorageImageUpdateAfterBind;
             features12.descriptorBindingPartiallyBound = parameters->descriptorBindingPartiallyBound;
+            features12.timelineSemaphore = parameters->timelineSemaphore;
+            features12.vulkanMemoryModel = parameters->vulkanMemoryModel;
+            features12.vulkanMemoryModelDeviceScope = parameters->vulkanMemoryModelDeviceScope;
+            features12.storageBuffer8BitAccess = parameters->storageBuffer8BitAccess;
             *pNextChain = &features12;
             pNextChain = &features12.pNext;
         }
