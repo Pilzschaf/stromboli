@@ -4,6 +4,10 @@
 #include <grounded/string/grounded_string.h>
 #include <volk/volk.h>
 
+#ifndef STROMBOLI_NO_VMA
+#include <vk_mem_alloc.h>
+#endif
+
 #define STROMBOLI_SUCCESS() ((StromboliResult){0})
 #define STROMBOLI_MAKE_ERROR(code, text) ((StromboliResult){code, STR8_LITERAL(text)})
 #define STROMBOLI_ERROR(result) (result.error)
@@ -80,6 +84,10 @@ typedef struct StromboliBuffer {
     u64 size;
     void* mapped; // If this buffer is host visible this points to the buffer data
     struct StromboliAllocationContext* allocator;
+
+#ifndef STROMBOLI_NO_VMA
+    VmaAllocation allocation;
+#endif
 } StromboliBuffer;
 
 enum StromboliPipelineType {
@@ -138,6 +146,9 @@ typedef struct StromboliImage {
 
     VkDeviceMemory memory;
     struct StromboliAllocationContext* allocator;
+#ifndef STROMBOLI_NO_VMA
+    VmaAllocation allocation;
+#endif
 } StromboliImage;
 
 struct StromboliImageParameters {
@@ -413,7 +424,8 @@ void submitUploadContext(StromboliContext* context, StromboliUploadContext* uplo
 void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext);
 bool isDepthFormat(VkFormat format);
 u32 stromboliFindMemoryType(StromboliContext* context, u32 typeFilter, VkMemoryPropertyFlags memoryProperties);
-VkSampler stromboliSamplerCreate(StromboliContext* context, bool linear, VkSamplerAddressMode edgeMode);
+VkSampler 
+stromboliSamplerCreate(StromboliContext* context, bool linear, VkSamplerAddressMode edgeMode);
 
 StromboliArenaAllocator stromboliCreateArenaAllocator(StromboliContext* context, u32 memoryProperties, u64 size);
 void stromboliFreeArenaAllocator(StromboliContext* context, StromboliArenaAllocator* allocator);

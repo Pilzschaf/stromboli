@@ -435,7 +435,6 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 	createInfo.size = size;
 	createInfo.usage = usage;
 
-#ifdef STROMBOLI_NO_VMA
 	vkCreateBuffer(context->device, &createInfo, 0, &result.buffer);
 
 	VkMemoryRequirements memoryRequirements;
@@ -469,13 +468,13 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 			result.mapped = 0;
 		}
 	}
-#else
+	/*
 	VmaAllocationCreateInfo allocInfo = {0};
 	allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 	vmaCreateBuffer(context->vmaAllocator, &createInfo, &allocInfo, &result.buffer, &result.allocation, 0);
 	//vmaAllocateMemoryForBuffer(context->vmaAllocator, buffer->buffer, &allocInfo, &buffer->allocation, 0);
 	vmaMapMemory(context->vmaAllocator, result.allocation, &result.mapped);
-#endif
+	*/
 
 	result.size = size;
 	return result;

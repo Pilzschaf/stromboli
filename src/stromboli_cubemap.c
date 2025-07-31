@@ -15,7 +15,7 @@ StromboliImage createCubemapFromEquirectangularPanorama(StromboliContext* contex
     StromboliImage result = stromboliImageCreate(context, cubemapSize, cubemapSize, format, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &(struct StromboliImageParameters) {
         .cubemap = true,
         .layerCount = 6,
-    });
+    }, 0);
 
     StromboliUploadContext uploadContext = createUploadContext(context, &context->graphicsQueues[0], 0);
     u64 size = cubemapSize * cubemapSize * 4;
@@ -71,7 +71,7 @@ StromboliImage createCubemapFromFaces(StromboliContext* context, VkFormat format
     StromboliImage result = stromboliImageCreate(context, width, height, format, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &(struct StromboliImageParameters) {
         .cubemap = true,
         .layerCount = 6,
-    });
+    }, 0);
 
     StromboliUploadContext uploadContext = createUploadContext(context, &context->graphicsQueues[0], 0);
     for(u32 face = 0; face < 6; ++face) {

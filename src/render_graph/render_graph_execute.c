@@ -9,7 +9,7 @@ RenderGraphPass* beginRenderPass(RenderGraph* graph, RenderGraphPassHandle passH
     ArenaTempMemory temp = arenaBeginTemp(scratch);
 
     // When this assert triggers it is very likely, that you use an outdated pass handle that has not been submitted to the builder of this graph
-    ASSERT(getFingerprint(passHandle) == graph->fingerprint);
+    ASSERT(getPassFingerprint(passHandle) == graph->fingerprint);
 
     u32 passHandleValue = getPassHandleData(passHandle);
     ASSERT(passHandleValue <= graph->passCount);

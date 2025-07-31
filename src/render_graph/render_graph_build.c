@@ -35,7 +35,7 @@ RenderGraphPassHandle renderGraphAddGraphicsPass(RenderGraphBuilder* builder, St
         ASSERT(result.handle < INVERSE_FINGERPRINT_MASK);
         result.handle |= builder->fingerprint << FINGERPRINT_SHIFT;
         ASSERT(isPassFingerprintValid(builder, result));
-        ASSERT(getHandleData(result) == builder->currentPassIndex-1);
+        ASSERT(getPassHandleData(result) == builder->currentPassIndex-1);
     }
     
     return result;
@@ -55,7 +55,7 @@ RenderGraphPassHandle renderGraphAddTransferPass(RenderGraphBuilder* builder, St
         ASSERT(result.handle < INVERSE_FINGERPRINT_MASK);
         result.handle |= builder->fingerprint << FINGERPRINT_SHIFT;
         ASSERT(isPassFingerprintValid(builder, result));
-        ASSERT(getHandleData(result) == builder->currentPassIndex-1);
+        ASSERT(getPassHandleData(result) == builder->currentPassIndex-1);
     }
     
     return result;
@@ -75,7 +75,7 @@ RenderGraphPassHandle renderGraphAddComputePass(RenderGraphBuilder* builder, Str
         ASSERT(result.handle < INVERSE_FINGERPRINT_MASK);
         result.handle |= builder->fingerprint << FINGERPRINT_SHIFT;
         ASSERT(isPassFingerprintValid(builder, result));
-        ASSERT(getHandleData(result) == builder->currentPassIndex-1);
+        ASSERT(getPassHandleData(result) == builder->currentPassIndex-1);
     }
     
     return result;
@@ -95,7 +95,7 @@ RenderGraphPassHandle renderGraphAddRaytracePass(RenderGraphBuilder* builder, St
         ASSERT(result.handle < INVERSE_FINGERPRINT_MASK);
         result.handle |= builder->fingerprint << FINGERPRINT_SHIFT;
         ASSERT(isPassFingerprintValid(builder, result));
-        ASSERT(getHandleData(result) == builder->currentPassIndex-1);
+        ASSERT(getPassHandleData(result) == builder->currentPassIndex-1);
     }
     
     return result;
@@ -103,7 +103,7 @@ RenderGraphPassHandle renderGraphAddRaytracePass(RenderGraphBuilder* builder, St
 
 static inline struct RenderGraphBuildPass* getPassFromHandle(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle) {
     ASSERT(isPassFingerprintValid(builder, passHandle));
-    u32 passHandleValue = getHandleData(passHandle);
+    u32 passHandleValue = getPassHandleData(passHandle);
     u32 stepCount = builder->currentPassIndex - passHandleValue - 1;
     struct RenderGraphBuildPass* pass = builder->passSentinel.next;
     for(u32 i = 0; i < stepCount; ++i) {
@@ -130,7 +130,7 @@ RenderGraphImageHandle renderGraphCreateClearedFramebuffer(RenderGraphBuilder* b
     ASSERT(resultHandle.handle < INVERSE_FINGERPRINT_MASK);
     resultHandle.handle |= builder->fingerprint << FINGERPRINT_SHIFT;
     ASSERT(isImageFingerprintValid(builder, resultHandle));
-    ASSERT(getHandleData(resultHandle) == builder->currentResourceIndex-1);
+    ASSERT(getImageHandleData(resultHandle) == builder->currentResourceIndex-1);
     return resultHandle;
 }
 
@@ -166,7 +166,7 @@ RenderGraphImageHandle renderPassAddOutput(RenderGraphBuilder* builder, RenderGr
     ASSERT(outputHandle.handle < INVERSE_FINGERPRINT_MASK);
     outputHandle.handle |= builder->fingerprint << FINGERPRINT_SHIFT;
     ASSERT(isImageFingerprintValid(builder, outputHandle));
-    ASSERT(getHandleData(outputHandle) == builder->currentResourceIndex-1);
+    ASSERT(getImageHandleData(outputHandle) == builder->currentResourceIndex-1);
     return outputHandle;
 
     if(parameters->resolveMode && parameters->sampleCount > 0 && parameters->sampleCount != VK_SAMPLE_COUNT_1_BIT) {

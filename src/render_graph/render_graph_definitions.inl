@@ -134,16 +134,6 @@ struct RenderGraphBuilder {
     u32 fingerprint;
 };
 
-static inline struct RenderGraphBuildImage* getImageFromHandle(RenderGraphBuilder* builder, RenderGraphImageHandle imageHandle) {
-    ASSERT(isImageFingerprintValid(builder, imageHandle));
-    u32 stepCount = builder->currentResourceIndex - imageHandle.handle - 1;
-    struct RenderGraphBuildImage* image = builder->imageSentinel.next;
-    for(u32 i = 0; i < stepCount; ++i) {
-        image = image->next;
-    }
-    return image;
-}
-
 static inline u32 getPassFingerprint(RenderGraphPassHandle passHandle) {
     u32 result = ((passHandle.handle & (~INVERSE_FINGERPRINT_MASK)) >> FINGERPRINT_SHIFT);
     return result;
@@ -169,10 +159,19 @@ static inline bool isPassFingerprintValid(RenderGraphBuilder* builder, RenderGra
     return result;
 }
 
-
 static inline bool isImageFingerprintValid(RenderGraphBuilder* builder, RenderGraphImageHandle imageHandle) {
     bool result = builder->fingerprint == getImageFingerprint(imageHandle);
     return result;
+}
+
+static inline struct RenderGraphBuildImage* getImageFromHandle(RenderGraphBuilder* builder, RenderGraphImageHandle imageHandle) {
+    ASSERT(isImageFingerprintValid(builder, imageHandle));
+    u32 stepCount = builder->currentResourceIndex - imageHandle.handle - 1;
+    struct RenderGraphBuildImage* image = builder->imageSentinel.next;
+    for(u32 i = 0; i < stepCount; ++i) {
+        image = image->next;
+    }
+    return image;
 }
 
 #endif // RENDER_GRAPH_DEFINITIONS
