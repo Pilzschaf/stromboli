@@ -6,14 +6,18 @@
  *  And either need to use non-typesafe userpointers or global data to access our variables. And the controlflow is bad
  * Possibility 2:
  *  We make it completely immediate mode and abstract command buffers and all vkCmds. Then we can first store them
- *  Without concreate image views and record the commands right before submission into the actual command buffers
+ *  Without concrete image views and record the commands right before submission into the actual command buffers
  *  This variant requires a lot of abstraction and work. But would be easy to expand to other graphics APIs.
  * Possibilty 3:
  *  We use a not completely immediate mode API. We have a step which creates the graph itself. This could be done
  *  per frame or at another more coarse granularity. We create passes with unique ids or names or similar
- *  When rendering we say start out pass and can receive all relevant info and framebuffers etc. at this point and can directly write into the command buffer
- * Currently I strongly prefer Variant 3 at least as a first step. Variant 2 might be really interesting when expanding onto other APIs
+ *  When rendering we say start our pass and can receive all relevant info and framebuffers etc. at this point and can directly write into the command buffer
+ * Currently I strongly prefer Variant 3 at least as a first step. Variant 2 might be really interesting when expanding onto other graphics APIs
  */
+
+// Render Graph does not overlap the execution of one graph with the next. 
+// However there might still be an overlap between
+// Recording and Execution which would make double buffering necessary.
 
 #ifndef RENDER_GRAPH_H
 #define RENDER_GRAPH_H
@@ -25,12 +29,11 @@ typedef struct RenderGraph RenderGraph;
 typedef struct RenderGraphBuilder RenderGraphBuilder;
 typedef struct RenderGraphPass RenderGraphPass;
 
-//TODO: Also add a small id to the upper bits to check that the pass index is valid for the current frame!
 typedef struct  RenderGraphPassHandle {
-    u32 handle;
+    u32 handle; // Upper FINGERPRINT_BITS (default 8) bits store a frame fingerprint
 } RenderGraphPassHandle;
 typedef struct RenderGraphImageHandle {
-    u32 handle;
+    u32 handle; // Upper FINGERPRINT_BITS (default 8) bits store a frame fingerprint
 } RenderGraphImageHandle;
 
 struct RenderPassOutputParameters {
@@ -73,6 +76,7 @@ StromboliImage* renderPassGetOutputResource(RenderGraphPass* pass, RenderGraphIm
 bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFence fence); // Returns false if swapchain must be resized
 float renderGraphGetLastDuration(RenderGraph* graph);
 
+// Debug
 void renderGraphBuilderPrint(RenderGraphBuilder* builder);
 void renderGraphPrint(RenderGraph* graph);
 

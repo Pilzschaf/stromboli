@@ -75,7 +75,7 @@ static void sortPasses(RenderGraphBuilder* builder, u32 passCount, RenderGraph* 
             if(visited[passIndex] == 2) {
                 visited[passIndex] = 3;
                 struct RenderGraphBuildPass* buildPass = getPassAtIndex(firstPass, passIndex);
-                sortedPasses[sortedCount].name = buildPass->name; //TODO: Could do a strCopy here with result->arena
+                sortedPasses[sortedCount].name = str8Copy(&result->arena, buildPass->name);
                 sortedPasses[sortedCount].type = buildPass->type;
                 sortedPasses[sortedCount].inputCount = buildPass->inputCount;
                 sortedPasses[sortedCount].outputCount = buildPass->outputCount;

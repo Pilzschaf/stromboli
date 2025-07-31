@@ -96,19 +96,6 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
 
     u32 requestedInstanceExtensionCount = parameters->additionalInstanceExtensionCount;
     const char** requestedInstanceExtensions = parameters->additionalInstanceExtensions;
-    if(STROMBOLI_NO_ERROR(error) && parameters->platformGetRequiredNativeInstanceExtensions) {
-        u32 count = 0;
-        const char** platformInstanceExtensions = parameters->platformGetRequiredNativeInstanceExtensions(&count);
-        if(count > 0 && platformInstanceExtensions) {
-            const char** oldRequestedInstanceExtensions = requestedInstanceExtensions;
-            requestedInstanceExtensions = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, requestedInstanceExtensionCount + count, const char*);
-            if(requestedInstanceExtensionCount) {
-                memcpy(requestedInstanceExtensions, oldRequestedInstanceExtensions, sizeof(const char*) * requestedInstanceExtensionCount);
-            }
-            memcpy(requestedInstanceExtensions + requestedInstanceExtensionCount, platformInstanceExtensions, sizeof(const char*) * count);
-            requestedInstanceExtensionCount += count;
-        }
-    }
 
     // We always request VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME when we create a Vulkan 1.0 instance
     if(apiVersion < VK_API_VERSION_1_1) {
@@ -173,6 +160,23 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
         if(parameters->enableBestPracticeWarning) {
             enabledValidationFeatures[enabledValidationFeatureCount++] = VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT;
         }
+        if(parameters->enableGpuAssistedValidation) {
+            if(apiVersion < VK_API_VERSION_1_1) {
+                GROUNDED_LOG_WARNING("GPU assisted validation requires at least Vulkan 1.1");
+                parameters->enableGpuAssistedValidation = false;
+            } else {
+                enabledValidationFeatures[enabledValidationFeatureCount++] = VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT;
+                // Required for gpu assisted validation
+                parameters->fragmentStoresAndAtomicsFeature = true;
+                parameters->vertexPipelineStoresAndAtomicsFeature = true;
+                parameters->shaderInt64 = true;
+                parameters->timelineSemaphore = true;
+                parameters->vulkanMemoryModel = true;
+                parameters->vulkanMemoryModelDeviceScope = true;
+                parameters->bufferDeviceAddress = true;
+                parameters->storageBuffer8BitAccess = true;
+            }
+        }
         if(parameters->enableShaderDebugPrintf) {
             if(parameters->enableGpuAssistedValidation) {
                 GROUNDED_LOG_WARNING("Can not activate shader debug printf at the same time as gpu assisted validation. Ignoring shader debug printf");
@@ -182,9 +186,6 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
         }
         if(parameters->enableSynchronizationValidation) {
             enabledValidationFeatures[enabledValidationFeatureCount++] = VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
-        }
-        if(parameters->enableGpuAssistedValidation) {
-            enabledValidationFeatures[enabledValidationFeatureCount++] = VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT;
         }
         if(parameters->enableGpuReservedBindingSlot) {
             if(!parameters->enableGpuAssistedValidation) {
@@ -284,6 +285,10 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
     }
     if(parameters->nonUniformIndexingSampledImageArray && context->apiVersion < VK_API_VERSION_1_2) {
         requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME;
+        if(context->apiVersion < VK_API_VERSION_1_1) {
+            // Required by VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
+            requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_MAINTENANCE3_EXTENSION_NAME;
+        }
     }
     if(parameters->descriptorUpdateTemplate) { // Promoted to VK_API_VERSION_1_1
         requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_DESCRIPTOR_UPDATE_TEMPLATE_EXTENSION_NAME;
@@ -429,6 +434,8 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
         VkPhysicalDeviceAccelerationStructureFeaturesKHR asFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
         VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR};
         VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynamicRenderingUnusedAttachmentsFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT};
+        VkPhysicalDeviceDescriptorIndexingFeaturesEXT descriptorIndexingFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES};
+        VkPhysicalDeviceSynchronization2FeaturesKHR synchronization2Features = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR};
 
         if(context->apiVersion >= VK_API_VERSION_1_2) {
             features12.bufferDeviceAddress = parameters->bufferDeviceAddress;
@@ -447,16 +454,23 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
             features12.storageBuffer8BitAccess = parameters->storageBuffer8BitAccess;
             *pNextChain = &features12;
             pNextChain = &features12.pNext;
+        } else {
+            //TODO: More parameters when descriptor indexing extension is enabled
+            if(parameters->nonUniformIndexingSampledImageArray) {
+                descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+                *pNextChain = &descriptorIndexingFeatures;
+                pNextChain = &descriptorIndexingFeatures.pNext;
+            }
         }
 
         if(context->apiVersion >= VK_API_VERSION_1_3) {
             features13.dynamicRendering = parameters->dynamicRendering;
-            features13.synchronization2 = parameters->synchronization2;
+            // When using Vulkan 1.3 we always enable synchronization2
+            features13.synchronization2 = true;
             features13.maintenance4 = parameters->maintenance4;
             *pNextChain = &features13;
             pNextChain = &features13.pNext;
         } else if(parameters->synchronization2) {
-            VkPhysicalDeviceSynchronization2FeaturesKHR synchronization2Features = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR};
             synchronization2Features.synchronization2 = true;
             *pNextChain = &synchronization2Features;
             pNextChain = &synchronization2Features.pNext;

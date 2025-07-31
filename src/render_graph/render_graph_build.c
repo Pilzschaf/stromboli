@@ -34,7 +34,7 @@ RenderGraphPassHandle renderGraphAddGraphicsPass(RenderGraphBuilder* builder, St
         result.handle = builder->currentPassIndex++;
         ASSERT(result.handle < INVERSE_FINGERPRINT_MASK);
         result.handle |= builder->fingerprint << FINGERPRINT_SHIFT;
-        ASSERT(isFingerprintValid(builder, result));
+        ASSERT(isPassFingerprintValid(builder, result));
         ASSERT(getHandleData(result) == builder->currentPassIndex-1);
     }
     
@@ -54,7 +54,7 @@ RenderGraphPassHandle renderGraphAddTransferPass(RenderGraphBuilder* builder, St
         result.handle = builder->currentPassIndex++;
         ASSERT(result.handle < INVERSE_FINGERPRINT_MASK);
         result.handle |= builder->fingerprint << FINGERPRINT_SHIFT;
-        ASSERT(isFingerprintValid(builder, result));
+        ASSERT(isPassFingerprintValid(builder, result));
         ASSERT(getHandleData(result) == builder->currentPassIndex-1);
     }
     
@@ -74,7 +74,7 @@ RenderGraphPassHandle renderGraphAddComputePass(RenderGraphBuilder* builder, Str
         result.handle = builder->currentPassIndex++;
         ASSERT(result.handle < INVERSE_FINGERPRINT_MASK);
         result.handle |= builder->fingerprint << FINGERPRINT_SHIFT;
-        ASSERT(isFingerprintValid(builder, result));
+        ASSERT(isPassFingerprintValid(builder, result));
         ASSERT(getHandleData(result) == builder->currentPassIndex-1);
     }
     
@@ -94,7 +94,7 @@ RenderGraphPassHandle renderGraphAddRaytracePass(RenderGraphBuilder* builder, St
         result.handle = builder->currentPassIndex++;
         ASSERT(result.handle < INVERSE_FINGERPRINT_MASK);
         result.handle |= builder->fingerprint << FINGERPRINT_SHIFT;
-        ASSERT(isFingerprintValid(builder, result));
+        ASSERT(isPassFingerprintValid(builder, result));
         ASSERT(getHandleData(result) == builder->currentPassIndex-1);
     }
     
@@ -102,7 +102,7 @@ RenderGraphPassHandle renderGraphAddRaytracePass(RenderGraphBuilder* builder, St
 }
 
 static inline struct RenderGraphBuildPass* getPassFromHandle(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle) {
-    ASSERT(isFingerprintValid(builder, passHandle));
+    ASSERT(isPassFingerprintValid(builder, passHandle));
     u32 passHandleValue = getHandleData(passHandle);
     u32 stepCount = builder->currentPassIndex - passHandleValue - 1;
     struct RenderGraphBuildPass* pass = builder->passSentinel.next;
@@ -125,7 +125,13 @@ RenderGraphImageHandle renderGraphCreateClearedFramebuffer(RenderGraphBuilder* b
         result->clearColor = clearColor;
     }
 
-    return (RenderGraphImageHandle){builder->currentResourceIndex++};
+    RenderGraphImageHandle resultHandle = {0};
+    resultHandle.handle = builder->currentResourceIndex++;
+    ASSERT(resultHandle.handle < INVERSE_FINGERPRINT_MASK);
+    resultHandle.handle |= builder->fingerprint << FINGERPRINT_SHIFT;
+    ASSERT(isImageFingerprintValid(builder, resultHandle));
+    ASSERT(getHandleData(resultHandle) == builder->currentResourceIndex-1);
+    return resultHandle;
 }
 
 RenderGraphImageHandle renderPassAddOutput(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle, u32 width, u32 height, VkImageLayout layout, VkAccessFlags access, VkPipelineStageFlags2 stage, VkImageUsageFlags usage, VkFormat format, struct RenderPassOutputParameters* parameters) {
@@ -155,7 +161,13 @@ RenderGraphImageHandle renderPassAddOutput(RenderGraphBuilder* builder, RenderGr
         pass->outputs[pass->outputCount++].imageHandle.handle = builder->currentResourceIndex;
     }
 
-    RenderGraphImageHandle outputHandle = (RenderGraphImageHandle){builder->currentResourceIndex++};
+    RenderGraphImageHandle outputHandle = {0};
+    outputHandle.handle = builder->currentResourceIndex++;
+    ASSERT(outputHandle.handle < INVERSE_FINGERPRINT_MASK);
+    outputHandle.handle |= builder->fingerprint << FINGERPRINT_SHIFT;
+    ASSERT(isImageFingerprintValid(builder, outputHandle));
+    ASSERT(getHandleData(outputHandle) == builder->currentResourceIndex-1);
+    return outputHandle;
 
     if(parameters->resolveMode && parameters->sampleCount > 0 && parameters->sampleCount != VK_SAMPLE_COUNT_1_BIT) {
         // Not sure about usage and layout
@@ -180,6 +192,7 @@ RenderGraphImageHandle renderPassAddInput(RenderGraphBuilder* builder, RenderGra
     pass->inputs[pass->inputCount].usage = usage;
     struct RenderGraphBuildImage* input = getImageFromHandle(builder, inputHandle);
 
+    //TODO: Why outdated???
     //(outdated) As we have possibly changed layout etc. we mark ourselves as producer as otherwise the barriers could be in the wrong order and therefore do wrong layout transitions
     pass->inputs[pass->inputCount].producer = input->producer;
     pass->inputs[pass->inputCount].lastReader = pass;

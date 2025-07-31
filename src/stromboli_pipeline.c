@@ -611,6 +611,8 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
     return result;
 }
 
+
+//TODO: Test pipeline with any hit shader
 StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct StromboliRaytracingPipelineParameters* parameters) {
     //TRACY_ZONE_HELPER(createRaytracingPipeline);
 
@@ -626,6 +628,7 @@ StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct Str
     totalGroupCount += parameters->hitShaderCount;
     totalShaderCount += parameters->hitShaderCount;
     totalShaderCount += parameters->intersectionShaderCount;
+    totalShaderCount += parameters->anyHitShaderCount;
     
     ShaderInfo* shaderInfos = ARENA_PUSH_ARRAY(scratch, totalShaderCount, ShaderInfo);
     VkShaderModule* shaderModules = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, totalShaderCount, VkShaderModule);
@@ -646,6 +649,11 @@ StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct Str
     u32 firstIntersectionShaderIndex = currentShaderIndex;
     for(u32 i = 0; i < parameters->intersectionShaderCount; ++i) {
         shaderModules[currentShaderIndex] = createShaderModule(context, scratch, str8FromCstr(parameters->intersectionShaders[i].filename), &shaderInfos[currentShaderIndex]);
+        currentShaderIndex++;
+    }
+    u32 firstAnyHitShaderIndex = currentShaderIndex;
+    for(u32 i = 0; i < parameters->anyHitShaderCount; ++i) {
+        shaderModules[currentShaderIndex] = createShaderModule(context, scratch, str8FromCstr(parameters->anyHitShaders[i].filename), &shaderInfos[currentShaderIndex]);
         currentShaderIndex++;
     }
     ASSERT(currentShaderIndex == totalShaderCount);
@@ -685,7 +693,6 @@ StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct Str
     // Closest hit
     for(u32 i = 0; i < parameters->hitShaderCount; ++i) {
         groups[currentGroupIndex] = (VkRayTracingShaderGroupCreateInfoKHR){VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
-        groups[currentGroupIndex].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
         groups[currentGroupIndex].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
         groups[currentGroupIndex].generalShader = VK_SHADER_UNUSED_KHR;
         groups[currentGroupIndex].closestHitShader = currentShaderIndex++;
@@ -696,6 +703,24 @@ StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct Str
                 // There should not be multiple intersection shaders that map to the same closest hit shader
                 ASSERT(groups[currentGroupIndex].intersectionShader == VK_SHADER_UNUSED_KHR);
                 groups[currentGroupIndex].intersectionShader = firstIntersectionShaderIndex + j;
+            }
+        }
+        currentGroupIndex++;
+    }
+
+    // Any hit
+    for(u32 i = 0; i < parameters->anyHitShaderCount; ++i) {
+        groups[currentGroupIndex] = (VkRayTracingShaderGroupCreateInfoKHR){VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
+        groups[currentGroupIndex].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
+        groups[currentGroupIndex].generalShader = VK_SHADER_UNUSED_KHR;
+        groups[currentGroupIndex].closestHitShader = VK_SHADER_UNUSED_KHR;
+        groups[currentGroupIndex].anyHitShader = currentShaderIndex++;
+        groups[currentGroupIndex].intersectionShader = VK_SHADER_UNUSED_KHR;
+        for(u32 j = 0; j < parameters->intersectionShaderCount; ++j) {
+            if(parameters->intersectionShaders[j].matchingHitShaderIndex == i) {
+                // There should not be multiple intersection shaders that map to the same closest hit shader
+                ASSERT(groups[currentGroupIndex].closestHitShader == VK_SHADER_UNUSED_KHR);
+                groups[currentGroupIndex].closestHitShader = firstIntersectionShaderIndex + j;
             }
         }
         currentGroupIndex++;
@@ -734,7 +759,7 @@ StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct Str
         result.updateTemplates[i] = descriptorUpdateTemplates[i];
     }
 
-    //TODO: Correct the values here so they match the given parameters 
+    //TODO: Correct the values here so they match the given parameters
     // Create SBT buffer
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR};
     VkPhysicalDeviceProperties2 otherProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &rayTracingProperties};

@@ -11,7 +11,7 @@ RenderGraphPass* beginRenderPass(RenderGraph* graph, RenderGraphPassHandle passH
     // When this assert triggers it is very likely, that you use an outdated pass handle that has not been submitted to the builder of this graph
     ASSERT(getFingerprint(passHandle) == graph->fingerprint);
 
-    u32 passHandleValue = getHandleData(passHandle);
+    u32 passHandleValue = getPassHandleData(passHandle);
     ASSERT(passHandleValue <= graph->passCount);
 
     RenderGraphPass* pass = 0;
@@ -53,7 +53,9 @@ RenderGraphPass* beginRenderPass(RenderGraph* graph, RenderGraphPassHandle passH
                     // Resolve targets are not directly used as attachments and therefore skipped
                     continue;
                 }
-                StromboliImage* outputImage = &graph->images[output.imageHandle.handle];
+                ASSERT(getImageFingerprint(output.imageHandle) == graph->fingerprint);
+                u32 imageHandleData = getImageHandleData(output.imageHandle);
+                StromboliImage* outputImage = &graph->images[imageHandleData];
                 if(i == 0) {
                     stromboliCmdSetViewportAndScissor(commandBuffer, outputImage->width, outputImage->height);
                     renderingInfo.renderArea = (VkRect2D){{0, 0}, {outputImage->width, outputImage->height}};
@@ -70,7 +72,7 @@ RenderGraphPass* beginRenderPass(RenderGraph* graph, RenderGraphPassHandle passH
                     .imageView = outputImage->view,
                     .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 };
-                attachment->clearValue = graph->clearValues[output.imageHandle.handle];
+                attachment->clearValue = graph->clearValues[imageHandleData];
                 if(output.resolve.handle) {
                     StromboliImage* resolveTarget = renderPassGetOutputResource(pass, output.resolve);
                     if(resolveTarget) {
@@ -92,7 +94,9 @@ RenderGraphPass* beginRenderPass(RenderGraph* graph, RenderGraphPassHandle passH
         } else {
             for(u32 i = 0; i < pass->outputCount; ++i) {
                 struct RenderAttachment output = pass->outputs[i];
-                StromboliImage* outputImage = &graph->images[output.imageHandle.handle];
+                ASSERT(getImageFingerprint(output.imageHandle) == graph->fingerprint);
+                u32 imageHandleData = getImageHandleData(output.imageHandle);
+                StromboliImage* outputImage = &graph->images[imageHandleData];
                 bool depth = isDepthFormat(outputImage->format);
                 if(!depth) {
                     if(output.requiresClear) {
@@ -103,7 +107,7 @@ RenderGraphPass* beginRenderPass(RenderGraph* graph, RenderGraphPassHandle passH
                             .baseArrayLayer = 0,
                             .baseMipLevel = 0,
                         };
-                        vkCmdClearColorImage(commandBuffer, outputImage->image, output.layout, &graph->clearValues[output.imageHandle.handle].color, 1, &range);
+                        vkCmdClearColorImage(commandBuffer, outputImage->image, output.layout, &graph->clearValues[imageHandleData].color, 1, &range);
                     }
                 } else {
                     if(output.requiresClear) {
@@ -114,7 +118,7 @@ RenderGraphPass* beginRenderPass(RenderGraph* graph, RenderGraphPassHandle passH
                             .baseArrayLayer = 0,
                             .baseMipLevel = 0,
                         };
-                        vkCmdClearDepthStencilImage(commandBuffer, outputImage->image, VK_IMAGE_LAYOUT_GENERAL, &graph->clearValues[output.imageHandle.handle].depthStencil, 1, &range);
+                        vkCmdClearDepthStencilImage(commandBuffer, outputImage->image, VK_IMAGE_LAYOUT_GENERAL, &graph->clearValues[imageHandleData].depthStencil, 1, &range);
                     }
                 }
             }
@@ -143,12 +147,16 @@ VkCommandBuffer renderPassGetCommandBuffer(RenderGraphPass* pass) {
 }
 
 StromboliImage* renderPassGetInputResource(RenderGraphPass* pass, RenderGraphImageHandle imageHandle) {
-    StromboliImage* result = &pass->graph->images[imageHandle.handle];
+    ASSERT(getImageFingerprint(imageHandle) == pass->graph->fingerprint);
+    u32 imageHandleData = getImageHandleData(imageHandle);
+    StromboliImage* result = &pass->graph->images[imageHandleData];
     return result;
 }
 
 StromboliImage* renderPassGetOutputResource(RenderGraphPass* pass, RenderGraphImageHandle imageHandle) {
-    StromboliImage* result = &pass->graph->images[imageHandle.handle];
+    ASSERT(getImageFingerprint(imageHandle) == pass->graph->fingerprint);
+    u32 imageHandleData = getImageHandleData(imageHandle);
+    StromboliImage* result = &pass->graph->images[imageHandleData];
     return result;
 }
 
@@ -210,7 +218,9 @@ bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFen
         if(i == graph->swapchainOutputPassIndex) {
             // Layout transition
             VkImageMemoryBarrier2KHR imageBarrier = {0};
-            StromboliImage* finalImage = &graph->images[graph->finalImageHandle.handle];
+            ASSERT(getImageFingerprint(graph->finalImageHandle) == graph->fingerprint);
+            u32 imageHandleData = getImageHandleData(graph->finalImageHandle);
+            StromboliImage* finalImage = &graph->images[imageHandleData];
 
             VkImageMemoryBarrier2KHR imageBarriers[] = {
                 graph->finalImageBarrier,
@@ -327,119 +337,4 @@ void renderGraphDestroy(RenderGraph* graph, VkFence fence) {
     }
 
     MEMORY_CLEAR_STRUCT(graph);
-}
-
-
-
-
-
-
-
-
-
-//TODO: Maybe factor this out into its own file
-#include <stdio.h>
-#include <vulkan/vk_enum_string_helper.h>
-
-void renderGraphBuilderPrint(RenderGraphBuilder* builder) {
-    // Print all passes with all inputs and outputs
-    struct RenderGraphBuildPass* pass = builder->passSentinel.next;
-    u32 index = 0;
-    while(pass) {
-        printf("Pass%u: %.*s\n", index, (int)pass->name.size, (const char*)pass->name.base);
-
-        printf("\tInputs:\n");
-        for(u32 i = 0; i < pass->inputCount; ++i) {
-            struct RenderAttachment input = pass->inputs[i];
-            struct RenderGraphBuildImage* inputImage = getImageFromHandle(builder, input.imageHandle);
-            printf("\t\tIndex: %u\n", input.imageHandle.handle);
-            printf("\t\tFormat: %u\n", inputImage->format);
-        }
-
-        printf("\tOutputs:\n");
-        for(u32 i = 0; i < pass->outputCount; ++i) {
-            struct RenderAttachment output = pass->outputs[i];
-            struct RenderGraphBuildImage* outputImage = getImageFromHandle(builder, output.imageHandle);
-            printf("\t\tIndex: %u\n", output.imageHandle.handle);
-            printf("\t\tFormat: %u\n", outputImage->format);
-        }
-
-        pass = pass->next;
-        ++index;
-    }
-}
-
-static void printBarrier(VkImageMemoryBarrier2KHR barrier) {
-    printf("\t\tVkImage: %p\n", barrier.image);
-    printf("\t\tSource stage: %s\n", string_VkPipelineStageFlagBits2(barrier.srcStageMask));
-    printf("\t\tSource access: %s\n", string_VkAccessFlagBits2(barrier.srcAccessMask));
-    printf("\t\tOld layout: %s\n", string_VkImageLayout(barrier.oldLayout));
-    printf("\t\tDest stage: %s\n", string_VkPipelineStageFlagBits2(barrier.dstStageMask));
-    printf("\t\tDest access: %s\n", string_VkAccessFlagBits2(barrier.dstAccessMask));
-    printf("\t\tNew layout: %s\n", string_VkImageLayout(barrier.newLayout));
-}
-
-void renderGraphPrint(RenderGraph* graph) {
-    for(u32 i = 0; i < graph->passCount * 2; ++i) {
-        printf("Command buffer%u: %p\n", i, graph->commandBuffers[i]);
-    }
-    for(u32 passIndex = 0; passIndex < graph->passCount; ++passIndex) {
-        RenderGraphPass pass = graph->sortedPasses[passIndex];
-        printf("Pass%u: %.*s\n", passIndex, (int)pass.name.size, (const char*)pass.name.base);
-        if(passIndex == graph->swapchainOutputPassIndex) {
-            printf("\tSwapchain output\n");
-        }
-        printf("\tCommand buffer: %p\n", graph->commandBuffers[graph->commandBufferOffset + passIndex]);
-
-        printf("\tBarriers:\n");
-        for(u32 i = 0; i < pass.imageBarrierCount; ++i) {
-            VkImageMemoryBarrier2KHR barrier = pass.imageBarriers[i];
-            printBarrier(barrier);
-        }
-
-        if(pass.afterClearBarrierCount) {
-            printf("\tAfter clear barriers:\n");
-            for(u32 i = 0; i < pass.afterClearBarrierCount; ++i) {
-                VkImageMemoryBarrier2KHR barrier = pass.afterClearBarriers[i];
-                printBarrier(barrier);
-            }
-        }
-
-        printf("\tInputs:\n");
-        for(u32 i = 0; i < pass.inputCount; ++i) {
-            struct RenderAttachment input = pass.inputs[i];
-            struct StromboliImage* inputImage = &graph->images[input.imageHandle.handle];
-            printf("\tInput%u:\n", i);
-            printf("\t\tImage Index: %u\n", input.imageHandle.handle);
-            printf("\t\tVkImage: %p\n", inputImage->image);
-            printf("\t\tVkImageView: %p\n", inputImage->view);
-            printf("\t\tFormat: %s\n", string_VkFormat(inputImage->format));
-            printf("\t\tDimensions(WxHxD): %ux%ux%u\n", inputImage->width, inputImage->height, inputImage->depth);
-            printf("\t\tMipLevels: %u\n", inputImage->mipCount);
-            printf("\t\tSamples: %s\n", string_VkSampleCountFlagBits(inputImage->samples));
-        }
-
-        printf("\tOutputs:\n");
-        for(u32 i = 0; i < pass.outputCount; ++i) {
-            struct RenderAttachment output = pass.outputs[i];
-            struct StromboliImage* outputImage = &graph->images[output.imageHandle.handle];
-            printf("\tOutput%u:\n", i);
-            printf("\t\tImage Index: %u\n", output.imageHandle.handle);
-            printf("\t\tVkImage: %p\n", outputImage->image);
-            printf("\t\tVkImageView: %p\n", outputImage->view);
-            printf("\t\tFormat: %s\n", string_VkFormat(outputImage->format));
-            printf("\t\tDimensions(WxHxD): %ux%ux%u\n", outputImage->width, outputImage->height, outputImage->depth);
-            printf("\t\tMipLevels: %u\n", outputImage->mipCount);
-            printf("\t\tSamples: %s\n", string_VkSampleCountFlagBits(outputImage->samples));
-            if(output.requiresClear) {
-                VkClearValue clearValue = graph->clearValues[output.imageHandle.handle];
-                printf("\t\tCleared with: (%f,%f,%f,%f)\n", clearValue.color.float32[0], clearValue.color.float32[1], clearValue.color.float32[2], clearValue.color.float32[3]);
-            }
-        }
-    }
-    if(graph->finalImageBarrier.image) {
-        printf("\tFinal barrier:\n");
-        VkImageMemoryBarrier2KHR barrier = graph->finalImageBarrier;
-        printBarrier(barrier);
-    }
 }

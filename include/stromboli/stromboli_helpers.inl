@@ -42,14 +42,38 @@ static inline void stromboliPipelineBarrier(VkCommandBuffer commandBuffer, VkDep
 
 		vkCmdPipelineBarrier2KHR(commandBuffer, &dependencyInfo);
 	} else {
-		ASSERT(false);
-		/*
-		VkPipelineStageFlags srcStageMask = 0;
-		VkPipelineStageFlags dstStageMask = 0;
-		if(bufferBarrierCount) {
-			srcStageMask = bufferBarriers[0].srcStageMask;
+		// It is possible to combine multiple barriers into a single vkCmdPipelineBarrier call when src and dst stage mask match.
+		// For simplicity we dont do this here as using synchroniztation2 is the better solution anyways
+		for(u32 i = 0; i < bufferBarrierCount; ++i) {
+			VkBufferMemoryBarrier barrier = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+			barrier.buffer = bufferBarriers[i].buffer;
+			barrier.srcAccessMask = bufferBarriers[i].srcAccessMask;
+			barrier.srcQueueFamilyIndex = bufferBarriers[i].srcQueueFamilyIndex;
+			barrier.dstAccessMask = bufferBarriers[i].dstAccessMask;
+			barrier.dstQueueFamilyIndex = bufferBarriers[i].dstQueueFamilyIndex;
+			barrier.offset = bufferBarriers[i].offset;
+			barrier.size = bufferBarriers[i].size;
+
+			VkPipelineStageFlags srcStageMask = bufferBarriers[i].srcStageMask;
+			VkPipelineStageFlags dstStageMask = bufferBarriers[i].dstStageMask;
+			vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, dependencyFlags, 0, 0, 1, &barrier, 0, 0);
 		}
-		vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, dependencyFlags, 0, 0, bufferBarrierCount, bufferBarriers, imageBarrierCount, imageBarriers);*/
+
+		for(u32 i = 0; i < imageBarrierCount; ++i) {
+			VkImageMemoryBarrier barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+			barrier.image = imageBarriers[i].image;
+			barrier.srcAccessMask = imageBarriers[i].srcAccessMask;
+			barrier.srcQueueFamilyIndex = imageBarriers[i].srcQueueFamilyIndex;
+			barrier.subresourceRange = imageBarriers[i].subresourceRange;
+			barrier.oldLayout = imageBarriers[i].oldLayout;
+			barrier.newLayout = imageBarriers[i].newLayout;
+			barrier.dstAccessMask = imageBarriers[i].dstAccessMask;
+			barrier.dstQueueFamilyIndex = imageBarriers[i].dstQueueFamilyIndex;
+
+			VkPipelineStageFlags srcStageMask = imageBarriers[i].srcStageMask;
+			VkPipelineStageFlags dstStageMask = imageBarriers[i].dstStageMask;
+			vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, dependencyFlags, 0, 0, 0, 0, 1, &barrier);
+		}
 	}
 }
 
@@ -245,6 +269,7 @@ inline static VkCommandBuffer beginRenderSection(StromboliContext* context, Stro
 
 	return section->commandBuffers[frameIndex];
 }
+
 inline static void endRenderSection(StromboliContext* context, StromboliRenderSection* section, u32 frameIndex, u32 numWaitSemaphores, VkSemaphore* waitSemaphores, VkPipelineStageFlags* waitMasks, u32 numSignalSemaphores, VkSemaphore* signalSemaphores) {
 	renderSectionEndTimingSection(context, section, frameIndex);
 	// This assert triggers if there is a non mathing number of renderSectionBeginTimingSection and renderSectionEndTimingSection

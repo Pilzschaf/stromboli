@@ -4,7 +4,7 @@
 #include <stromboli/stromboli_render_graph.h>
 
 #ifndef FINGERPRINT_BITS
-#define FINGERPRINT_BITS 3
+#define FINGERPRINT_BITS 8
 #endif
 STATIC_ASSERT(FINGERPRINT_BITS > 0);
 
@@ -33,7 +33,7 @@ typedef struct RenderGraphBuildImage {
     VkFormat format;
     VkClearValue clearColor;
     bool isSwpachainOutput;
-    bool requiresClear; //TODO: Only used for renderGraphCreateClearedFramebuffer
+    bool requiresClear; // Only used for renderGraphCreateClearedFramebuffer as we cannot use attachment clear directly there
 } RenderGraphImage;
 
 struct RenderAttachment {
@@ -42,8 +42,7 @@ struct RenderAttachment {
     VkPipelineStageFlags2 stage;
     VkImageUsageFlags usage;
     RenderGraphImageHandle imageHandle;
-    //TODO: Should probably store producer here for combined input+output framebuffer support (as producers are changing for a single image)
-    struct RenderGraphBuildPass* producer; 
+    struct RenderGraphBuildPass* producer; // We store producer here for combined input+output framebuffer support (as producers are changing for a single image)
     struct RenderGraphBuildPass* lastReader; // Can be null
     bool requiresClear;
     bool resolveTarget; // This attachment is used as a resolve target and otherwise unused in the pass
@@ -108,7 +107,6 @@ struct RenderGraph {
 
     StromboliImage* images;
     VkClearValue* clearValues;
-    //bool* requiresClear;
     u32 imageCount;
     u32 fingerprint;
 
@@ -137,6 +135,7 @@ struct RenderGraphBuilder {
 };
 
 static inline struct RenderGraphBuildImage* getImageFromHandle(RenderGraphBuilder* builder, RenderGraphImageHandle imageHandle) {
+    ASSERT(isImageFingerprintValid(builder, imageHandle));
     u32 stepCount = builder->currentResourceIndex - imageHandle.handle - 1;
     struct RenderGraphBuildImage* image = builder->imageSentinel.next;
     for(u32 i = 0; i < stepCount; ++i) {
@@ -145,18 +144,34 @@ static inline struct RenderGraphBuildImage* getImageFromHandle(RenderGraphBuilde
     return image;
 }
 
-static inline u32 getFingerprint(RenderGraphPassHandle passHandle) {
+static inline u32 getPassFingerprint(RenderGraphPassHandle passHandle) {
     u32 result = ((passHandle.handle & (~INVERSE_FINGERPRINT_MASK)) >> FINGERPRINT_SHIFT);
     return result;
 }
 
-static inline u32 getHandleData(RenderGraphPassHandle passHandle) {
+static inline u32 getImageFingerprint(RenderGraphImageHandle imageHandle) {
+    u32 result = ((imageHandle.handle & (~INVERSE_FINGERPRINT_MASK)) >> FINGERPRINT_SHIFT);
+    return result;
+}
+
+static inline u32 getPassHandleData(RenderGraphPassHandle passHandle) {
     u32 result = passHandle.handle & INVERSE_FINGERPRINT_MASK;
     return result;
 }
 
-static inline bool isFingerprintValid(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle) {
-    bool result = builder->fingerprint == getFingerprint(passHandle);
+static inline u32 getImageHandleData(RenderGraphImageHandle imageHandle) {
+    u32 result = imageHandle.handle & INVERSE_FINGERPRINT_MASK;
+    return result;
+}
+
+static inline bool isPassFingerprintValid(RenderGraphBuilder* builder, RenderGraphPassHandle passHandle) {
+    bool result = builder->fingerprint == getPassFingerprint(passHandle);
+    return result;
+}
+
+
+static inline bool isImageFingerprintValid(RenderGraphBuilder* builder, RenderGraphImageHandle imageHandle) {
+    bool result = builder->fingerprint == getImageFingerprint(imageHandle);
     return result;
 }
 

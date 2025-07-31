@@ -95,23 +95,23 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 
 	#ifdef STROMBOLI_NO_VMA
 	VkMemoryRequirements memoryRequirements;
-	#if 1
-	vkGetImageMemoryRequirements(context->device, result.image, &memoryRequirements);
-	#else
-	VkImageMemoryRequirementsInfo2 memoryInfo = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2};
-	memoryInfo.image = result.image;
-	
-	VkMemoryDedicatedRequirements dedicatedRequirements = {VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS};
+	if(!vkGetImageMemoryRequirements2) {
+		vkGetImageMemoryRequirements(context->device, result.image, &memoryRequirements);
+	} else {
+		VkImageMemoryRequirementsInfo2 memoryInfo = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2};
+		memoryInfo.image = result.image;
+		
+		VkMemoryDedicatedRequirements dedicatedRequirements = {VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS};
 
-	VkMemoryRequirements2 imageMemoryRequirements = {VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
-	imageMemoryRequirements.pNext = &dedicatedRequirements;
-	vkGetImageMemoryRequirements2(context->device, &memoryInfo, &imageMemoryRequirements);
+		VkMemoryRequirements2 imageMemoryRequirements = {VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
+		imageMemoryRequirements.pNext = &dedicatedRequirements;
+		vkGetImageMemoryRequirements2(context->device, &memoryInfo, &imageMemoryRequirements);
 
-	memoryRequirements = imageMemoryRequirements.memoryRequirements;
-	if(dedicatedRequirements.prefersDedicatedAllocation) {
-		printf("Prefers dedicated allocation\n");
+		memoryRequirements = imageMemoryRequirements.memoryRequirements;
+		if(dedicatedRequirements.prefersDedicatedAllocation) {
+			printf("Prefers dedicated allocation\n");
+		}
 	}
-	#endif
 	
 	VkMemoryAllocateInfo allocateInfo = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
 	allocateInfo.allocationSize = memoryRequirements.size;
@@ -651,7 +651,7 @@ void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliIma
 	}
 }
 
-VkSampler stromboliSamplerCreate(StromboliContext* context, bool linear) {
+VkSampler stromboliSamplerCreate(StromboliContext* context, bool linear, VkSamplerAddressMode edgeMode) {
 	VkSampler result = 0;
 	VkFilter filter = linear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST; // Bilinear
 	VkSamplerMipmapMode mipmapMode = linear ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST; // Trilinear
@@ -660,9 +660,9 @@ VkSampler stromboliSamplerCreate(StromboliContext* context, bool linear) {
 	createInfo.magFilter = filter;
 	createInfo.minFilter = filter;
 	createInfo.mipmapMode = mipmapMode;
-	createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE; //TODO: Allow other modes
-	createInfo.addressModeV = createInfo.addressModeU;
-    createInfo.addressModeW = createInfo.addressModeU;
+	createInfo.addressModeU = edgeMode;
+	createInfo.addressModeV = edgeMode;
+    createInfo.addressModeW = edgeMode;
 	createInfo.mipLodBias = 0.0f;
     createInfo.maxAnisotropy = 1.0f;
     createInfo.minLod = -1000;

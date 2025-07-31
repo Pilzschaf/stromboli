@@ -20,8 +20,6 @@
 #define STROMBOLI_QUEUE_FLAG_SUPPORTS_PRESENT      0x01
 typedef struct StromboliQueue {
 	VkQueue queue;
-    // Queue submits should be guarded with this mutex
-    //GroundedMutex mutex;
 	u32 familyIndex;
     u32 flags;
 } StromboliQueue;
@@ -162,23 +160,25 @@ typedef struct StromboliDescriptorInfo {
 } StromboliDescriptorInfo;
 
 typedef struct StromboliInitializationParameters {
+    // Extensions
     u32 additionalInstanceExtensionCount;
     u32 additionalDeviceExtensionCount;
     const char** additionalInstanceExtensions;
     const char** additionalDeviceExtensions;
-    // Callback so the applciation does not have to do heap allocations for the instance extension list
-    const char** (*platformGetRequiredNativeInstanceExtensions) (u32*); // A value of 0 indicates that no instance extensions are required by the given backend
-
+    
+    // General
     String8 applicationName;
     u32 applicationMajorVersion;
     u32 applicationMinorVersion;
     u32 applicationPatchVersion;
     u32 vulkanApiVersion;
 
+    // Queues
     u32 additionalGraphicsQueueRequestCount; // The maximum number of additional graphics queues. Actual available count might be less
     u32 computeQueueRequestCount; // The maximum number of comptue queues. Actual available count might be less
     u32 transferQueueRequestCount; // The maximum number of transfre queues. Actual available count might be less
 
+    // Validation
     bool enableValidation;
     bool enableSynchronizationValidation;
     bool enableBestPracticeWarning;
@@ -276,6 +276,7 @@ typedef struct StromboliSpecializationConstant {
     };
 } StromboliSpecializationConstant;
 
+//TODO: No file reading stuff here. Instead directly take in the shader bytecode from memory. File reading stuff should be on application side (maybe provide a helper)
 typedef struct StromboliGraphicsPipelineParameters {
     String8 vertexShaderFilename;
     String8 fragmentShaderFilename;
@@ -304,17 +305,20 @@ typedef struct StromboliGraphicsPipelineParameters {
     bool enableBlending;
 } StromboliGraphicsPipelineParameters;
 
+//TODO: No file reading stuff here. Instead directly take in the shader bytecode from memory. File reading stuff should be on application side (maybe provide a helper)
 struct StromboliComputePipelineParameters {
     String8 filename;
 
     VkDescriptorSetLayout setLayotus[4]; // Optionally overwrite descriptor set layouts
 };
 
+//TODO: No file reading stuff here. Instead directly take in the shader bytecode from memory. File reading stuff should be on application side (maybe provide a helper)
 struct StromboliIntersectionShaderSlot {
     const char* filename;
     u32 matchingHitShaderIndex;
 };
 
+//TODO: No file reading stuff here. Instead directly take in the shader bytecode from memory. File reading stuff should be on application side (maybe provide a helper)
 struct StromboliRaytracingPipelineParameters {
     // Multile raygen shaders are possible but each launch can only use one
     const char* raygenShaderFilename;
@@ -328,7 +332,8 @@ struct StromboliRaytracingPipelineParameters {
     struct StromboliIntersectionShaderSlot* intersectionShaders;
     u32 intersectionShaderCount;
 
-    //TODO: Any hit shaders should work similarily to interseciton shaders and must specify an index for the corresponding hit shader
+    struct StromboliIntersectionShaderSlot* anyHitShaders;
+    u32 anyHitShaderCount;
 };
 
 // An upload context is used for the upload of data into device local buffers.
@@ -408,7 +413,7 @@ void submitUploadContext(StromboliContext* context, StromboliUploadContext* uplo
 void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext);
 bool isDepthFormat(VkFormat format);
 u32 stromboliFindMemoryType(StromboliContext* context, u32 typeFilter, VkMemoryPropertyFlags memoryProperties);
-VkSampler stromboliSamplerCreate(StromboliContext* context, bool linear);
+VkSampler stromboliSamplerCreate(StromboliContext* context, bool linear, VkSamplerAddressMode edgeMode);
 
 StromboliArenaAllocator stromboliCreateArenaAllocator(StromboliContext* context, u32 memoryProperties, u64 size);
 void stromboliFreeArenaAllocator(StromboliContext* context, StromboliArenaAllocator* allocator);
