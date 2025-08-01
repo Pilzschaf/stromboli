@@ -95,7 +95,7 @@ struct RenderGraph {
 
     StromboliContext* context;
     VkSemaphore imageAcquireSemaphore;
-    VkSemaphore imageReleaseSemaphore;
+    VkSemaphore imageReleaseSemaphores[MAX_SWAPCHAIN_IMAGES];
     RenderGraphImageHandle finalImageHandle;
     VkImageMemoryBarrier2KHR finalImageBarrier;
     u32 swapchainOutputPassIndex; // required to know where to put layout transitions for swapchain images
@@ -166,7 +166,7 @@ static inline bool isImageFingerprintValid(RenderGraphBuilder* builder, RenderGr
 
 static inline struct RenderGraphBuildImage* getImageFromHandle(RenderGraphBuilder* builder, RenderGraphImageHandle imageHandle) {
     ASSERT(isImageFingerprintValid(builder, imageHandle));
-    u32 stepCount = builder->currentResourceIndex - imageHandle.handle - 1;
+    u32 stepCount = builder->currentResourceIndex - getImageHandleData(imageHandle) - 1;
     struct RenderGraphBuildImage* image = builder->imageSentinel.next;
     for(u32 i = 0; i < stepCount; ++i) {
         image = image->next;

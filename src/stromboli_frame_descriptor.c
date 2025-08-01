@@ -36,6 +36,7 @@ void stromboliFrameDescriptorInit(StromboliContext* context) {
             {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 512},
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 512},
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 512},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 512},
         };
         VkDescriptorPoolCreateInfo createInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
         //TODO: Look at VK_DESCRIPTOR_POOL_CREATE_ALLOW_OVERALLOCATION_SETS_BIT_NV

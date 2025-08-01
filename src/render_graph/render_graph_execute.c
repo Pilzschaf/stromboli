@@ -225,7 +225,7 @@ bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFen
             VkImageMemoryBarrier2KHR imageBarriers[] = {
                 graph->finalImageBarrier,
                 stromboliCreateImageBarrier(image,
-                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED, 
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED, 
                     VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL),
                     };
             stromboliPipelineBarrier(commandBuffer, 0, 0, 0, ARRAY_COUNT(imageBarriers), imageBarriers);
@@ -264,7 +264,7 @@ bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFen
     submitInfo.commandBufferCount = graph->passCount;
     submitInfo.pCommandBuffers = graph->commandBuffers + graph->commandBufferOffset;
     submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = &graph->imageReleaseSemaphore;
+    submitInfo.pSignalSemaphores = &graph->imageReleaseSemaphores[imageIndex];
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = &graph->imageAcquireSemaphore;
     VkPipelineStageFlags waitMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -276,7 +276,7 @@ bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFen
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = &swapchain->swapchain;
     presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &graph->imageReleaseSemaphore;
+    presentInfo.pWaitSemaphores = &graph->imageReleaseSemaphores[imageIndex];
     presentInfo.pImageIndices = &imageIndex;
     VkResult presentResult = vkQueuePresentKHR(context->graphicsQueues[0].queue, &presentInfo);
 
@@ -330,7 +330,9 @@ void renderGraphDestroy(RenderGraph* graph, VkFence fence) {
     vkDestroyQueryPool(context->device, graph->queryPools[1], 0);
 
     vkDestroySemaphore(context->device, graph->imageAcquireSemaphore, 0);
-    vkDestroySemaphore(context->device, graph->imageReleaseSemaphore, 0);
+    for(u32 i = 0; i < MAX_SWAPCHAIN_IMAGES; ++i) {
+        vkDestroySemaphore(context->device, graph->imageReleaseSemaphores[i], 0);
+    }
 
     for(u32 i = 0; i < graph->imageCount; ++i) {
         stromboliImageDestroy(context, &graph->images[i]);

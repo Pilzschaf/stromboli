@@ -314,7 +314,9 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
         if(!result->imageAcquireSemaphore) {
             VkSemaphoreCreateInfo createInfo = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
             vkCreateSemaphore(builder->context->device, &createInfo, 0, &result->imageAcquireSemaphore);
-            vkCreateSemaphore(builder->context->device, &createInfo, 0, &result->imageReleaseSemaphore);
+            for(u32 i = 0; i < MAX_SWAPCHAIN_IMAGES; ++i) {
+                vkCreateSemaphore(builder->context->device, &createInfo, 0, &result->imageReleaseSemaphores[i]);
+            }
         }
 
         if(imageDeleteCount) {
@@ -380,15 +382,15 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
                 }
 
                 if(inputImage->isSwpachainOutput) {
-                    pass->imageBarriers[pass->imageBarrierCount++] = stromboliCreateImageBarrier(result->images[inputAttachment.imageHandle.handle].image, 
+                    pass->imageBarriers[pass->imageBarrierCount++] = stromboliCreateImageBarrier(result->images[getImageHandleData(inputAttachment.imageHandle)].image, 
                         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                         inputAttachment.stage, inputAttachment.access, inputAttachment.layout);
                 } else {
-                    pass->imageBarriers[pass->imageBarrierCount++] = stromboliCreateImageBarrier(result->images[inputAttachment.imageHandle.handle].image, 
+                    pass->imageBarriers[pass->imageBarrierCount++] = stromboliCreateImageBarrier(result->images[getImageHandleData(inputAttachment.imageHandle)].image, 
                         outputAttachment.stage, outputAttachment.access, outputAttachment.layout,
                         inputAttachment.stage, inputAttachment.access, inputAttachment.layout);
                 }
-                if(isDepthFormat(result->images[inputAttachment.imageHandle.handle].format)) {
+                if(isDepthFormat(result->images[getImageHandleData(inputAttachment.imageHandle)].format)) {
                     pass->imageBarriers[pass->imageBarrierCount-1].subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
                 }
             }
@@ -406,31 +408,31 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
                 }
                 RenderGraphImage* outputImage = getImageFromHandle(builder, outputAttachment.imageHandle);
                 if(pass->outputs[i].requiresClear) {
-                    result->clearValues[pass->outputs[i].imageHandle.handle] = outputImage->clearColor;
+                    result->clearValues[getImageHandleData(pass->outputs[i].imageHandle)] = outputImage->clearColor;
                 }
                 if(pass->outputs[i].requiresClear && pass->type != RENDER_GRAPH_PASS_TYPE_GRAPHICS) {
                     // We need barriers for an intermediate clear call
-                    pass->imageBarriers[pass->imageBarrierCount++] = stromboliCreateImageBarrier(result->images[outputAttachment.imageHandle.handle].image, 
+                    pass->imageBarriers[pass->imageBarrierCount++] = stromboliCreateImageBarrier(result->images[getImageHandleData(outputAttachment.imageHandle)].image, 
                         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED, 
                         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL);
-                    if(isDepthFormat(result->images[outputAttachment.imageHandle.handle].format)) {
+                    if(isDepthFormat(result->images[getImageHandleData(outputAttachment.imageHandle)].format)) {
                         pass->imageBarriers[pass->imageBarrierCount-1].subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
                     }
 
-                    VkImageMemoryBarrier2KHR afterClearBarrier = stromboliCreateImageBarrier(result->images[outputAttachment.imageHandle.handle].image,
+                    VkImageMemoryBarrier2KHR afterClearBarrier = stromboliCreateImageBarrier(result->images[getImageHandleData(outputAttachment.imageHandle)].image,
                         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL,
                         outputAttachment.stage, outputAttachment.access, outputAttachment.layout);
-                    if(isDepthFormat(result->images[outputAttachment.imageHandle.handle].format)) {
+                    if(isDepthFormat(result->images[getImageHandleData(outputAttachment.imageHandle)].format)) {
                         afterClearBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
                     }
                     totalClearBarriers[totalClearBarrierIndex++] = afterClearBarrier;
                     pass->afterClearBarrierCount++;
                 } else {
                     // We do not clear so we can transition from undefined and ignore previous content
-                    pass->imageBarriers[pass->imageBarrierCount++] = stromboliCreateImageBarrier(result->images[outputAttachment.imageHandle.handle].image, 
+                    pass->imageBarriers[pass->imageBarrierCount++] = stromboliCreateImageBarrier(result->images[getImageHandleData(outputAttachment.imageHandle)].image, 
                         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED, 
                         outputAttachment.stage, outputAttachment.access, outputAttachment.layout);
-                    if(isDepthFormat(result->images[outputAttachment.imageHandle.handle].format)) {
+                    if(isDepthFormat(result->images[getImageHandleData(outputAttachment.imageHandle)].format)) {
                         pass->imageBarriers[pass->imageBarrierCount-1].subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
                     }
                 }
@@ -447,7 +449,7 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
                 outputAttachment = producer->outputs[j];
             }
         }
-        result->finalImageBarrier = stromboliCreateImageBarrier(result->images[swapchainOutputHandle.handle].image, 
+        result->finalImageBarrier = stromboliCreateImageBarrier(result->images[getImageHandleData(swapchainOutputHandle)].image, 
             outputAttachment.stage, outputAttachment.access, outputAttachment.layout, 
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 

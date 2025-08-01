@@ -142,6 +142,13 @@ RenderGraphImageHandle renderPassAddOutput(RenderGraphBuilder* builder, RenderGr
         parameters = &defaultParameters;
     }
 
+    RenderGraphImageHandle outputHandle = {0};
+    outputHandle.handle = builder->currentResourceIndex++;
+    ASSERT(outputHandle.handle < INVERSE_FINGERPRINT_MASK);
+    outputHandle.handle |= builder->fingerprint << FINGERPRINT_SHIFT;
+    ASSERT(isImageFingerprintValid(builder, outputHandle));
+    ASSERT(getImageHandleData(outputHandle) == builder->currentResourceIndex-1);
+
     if(result) {
         result->producer = pass;
         result->next = builder->imageSentinel.next;
@@ -158,16 +165,8 @@ RenderGraphImageHandle renderPassAddOutput(RenderGraphBuilder* builder, RenderGr
         pass->outputs[pass->outputCount].stage = stage;
         pass->outputs[pass->outputCount].usage = usage;
         pass->outputs[pass->outputCount].requiresClear = parameters->clear;
-        pass->outputs[pass->outputCount++].imageHandle.handle = builder->currentResourceIndex;
+        pass->outputs[pass->outputCount++].imageHandle = outputHandle;   
     }
-
-    RenderGraphImageHandle outputHandle = {0};
-    outputHandle.handle = builder->currentResourceIndex++;
-    ASSERT(outputHandle.handle < INVERSE_FINGERPRINT_MASK);
-    outputHandle.handle |= builder->fingerprint << FINGERPRINT_SHIFT;
-    ASSERT(isImageFingerprintValid(builder, outputHandle));
-    ASSERT(getImageHandleData(outputHandle) == builder->currentResourceIndex-1);
-    return outputHandle;
 
     if(parameters->resolveMode && parameters->sampleCount > 0 && parameters->sampleCount != VK_SAMPLE_COUNT_1_BIT) {
         // Not sure about usage and layout

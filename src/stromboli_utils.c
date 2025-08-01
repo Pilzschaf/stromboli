@@ -437,44 +437,48 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 
 	vkCreateBuffer(context->device, &createInfo, 0, &result.buffer);
 
-	VkMemoryRequirements memoryRequirements;
-	vkGetBufferMemoryRequirements(context->device, result.buffer, &memoryRequirements);
-	u32 memoryIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, memoryProperties);
-	ASSERT(memoryIndex != UINT32_MAX);
+#ifndef VULKAN_NO_VMA
+	if(!allocationContext) {
+		VmaAllocationCreateInfo allocInfo = {0};
+		allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+		vmaCreateBuffer(context->vmaAllocator, &createInfo, &allocInfo, &result.buffer, &result.allocation, 0);
+		//vmaAllocateMemoryForBuffer(context->vmaAllocator, buffer->buffer, &allocInfo, &buffer->allocation, 0);
+		vmaMapMemory(context->vmaAllocator, result.allocation, &result.mapped);
+	} else
+#endif
+	{
+		VkMemoryRequirements memoryRequirements;
+		vkGetBufferMemoryRequirements(context->device, result.buffer, &memoryRequirements);
+		u32 memoryIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, memoryProperties);
+		ASSERT(memoryIndex != UINT32_MAX);
 
-	//VkMemoryAllocateFlagsInfo allocateFlags = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO};
-	//allocateFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+		//VkMemoryAllocateFlagsInfo allocateFlags = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO};
+		//allocateFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
 
-	VkMemoryAllocateInfo allocateInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-	//allocateInfo.pNext = &allocateFlags;
-	allocateInfo.allocationSize = memoryRequirements.size;
-	allocateInfo.memoryTypeIndex = memoryIndex;
+		VkMemoryAllocateInfo allocateInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+		//allocateInfo.pNext = &allocateFlags;
+		allocateInfo.allocationSize = memoryRequirements.size;
+		allocateInfo.memoryTypeIndex = memoryIndex;
 
-	VkDeviceSize memoryOffset = 0;
-	if(allocationContext) {
-		result.allocator = allocationContext;
-		result.memory = allocationContext->allocate(allocationContext, memoryRequirements, &memoryOffset, &result.mapped);
-	} else {
-		vkAllocateMemory(context->device, &allocateInfo, 0, &result.memory);
-	}
-
-	vkBindBufferMemory(context->device, result.buffer, result.memory, memoryOffset);
-
-	// We have to check all 3 as we are only checking user requested and not the property of the returned memory
-	if(!result.mapped) {
-		if((memoryProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)) {
-			vkMapMemory(context->device, result.memory, 0, VK_WHOLE_SIZE, 0, &result.mapped);
+		VkDeviceSize memoryOffset = 0;
+		if(allocationContext) {
+			result.allocator = allocationContext;
+			result.memory = allocationContext->allocate(allocationContext, memoryRequirements, &memoryOffset, &result.mapped);
 		} else {
-			result.mapped = 0;
+			vkAllocateMemory(context->device, &allocateInfo, 0, &result.memory);
+		}
+
+		vkBindBufferMemory(context->device, result.buffer, result.memory, memoryOffset);
+
+		// We have to check all 3 as we are only checking user requested and not the property of the returned memory
+		if(!result.mapped) {
+			if((memoryProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)) {
+				vkMapMemory(context->device, result.memory, 0, VK_WHOLE_SIZE, 0, &result.mapped);
+			} else {
+				result.mapped = 0;
+			}
 		}
 	}
-	/*
-	VmaAllocationCreateInfo allocInfo = {0};
-	allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-	vmaCreateBuffer(context->vmaAllocator, &createInfo, &allocInfo, &result.buffer, &result.allocation, 0);
-	//vmaAllocateMemoryForBuffer(context->vmaAllocator, buffer->buffer, &allocInfo, &buffer->allocation, 0);
-	vmaMapMemory(context->vmaAllocator, result.allocation, &result.mapped);
-	*/
 
 	result.size = size;
 	return result;
