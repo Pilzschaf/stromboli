@@ -287,10 +287,14 @@ typedef struct StromboliSpecializationConstant {
     };
 } StromboliSpecializationConstant;
 
-//TODO: No file reading stuff here. Instead directly take in the shader bytecode from memory. File reading stuff should be on application side (maybe provide a helper)
+typedef struct StromboliShaderSource {
+    const u8* data;
+    u64 size;
+} StromboliShaderSource;
+
 typedef struct StromboliGraphicsPipelineParameters {
-    String8 vertexShaderFilename;
-    String8 fragmentShaderFilename;
+    StromboliShaderSource vertexShader;
+    StromboliShaderSource fragmentShader;
 
     VkRenderPass renderPass;
     u32 subpassIndex;
@@ -316,28 +320,25 @@ typedef struct StromboliGraphicsPipelineParameters {
     bool enableBlending;
 } StromboliGraphicsPipelineParameters;
 
-//TODO: No file reading stuff here. Instead directly take in the shader bytecode from memory. File reading stuff should be on application side (maybe provide a helper)
 struct StromboliComputePipelineParameters {
-    String8 filename;
+    StromboliShaderSource source;
 
     VkDescriptorSetLayout setLayotus[4]; // Optionally overwrite descriptor set layouts
 };
 
-//TODO: No file reading stuff here. Instead directly take in the shader bytecode from memory. File reading stuff should be on application side (maybe provide a helper)
 struct StromboliIntersectionShaderSlot {
-    const char* filename;
+    StromboliShaderSource source;
     u32 matchingHitShaderIndex;
 };
 
-//TODO: No file reading stuff here. Instead directly take in the shader bytecode from memory. File reading stuff should be on application side (maybe provide a helper)
 struct StromboliRaytracingPipelineParameters {
     // Multile raygen shaders are possible but each launch can only use one
-    const char* raygenShaderFilename;
+    StromboliShaderSource raygenShader;
 
-    const char** missShaderFilenames;
+    StromboliShaderSource* missShaders;
     u32 missShaderCount;
 
-    const char** hitShaderFilenames;
+    StromboliShaderSource* hitShaders;
     u32 hitShaderCount;
 
     struct StromboliIntersectionShaderSlot* intersectionShaders;

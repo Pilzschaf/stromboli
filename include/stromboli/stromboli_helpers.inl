@@ -1,3 +1,4 @@
+
 #include "stromboli.h"
 #include <stromboli/stromboli_tracy.h>
 
@@ -136,6 +137,17 @@ struct StromboliRenderSectionTimingEntry {
 	u32 endIndex;
 };
 
+typedef struct StromboliTimingEntry {
+	const char* name;
+	float duration; // in ms
+} StromboliTimingEntry;
+
+typedef struct StromboliTimingData {
+	u32 entryCount;
+	float totalDuration; // in ms
+	struct StromboliTimingEntry entries[MAX_TIMING_SECTIONS_PER_RENDER_SECTION];
+} StromboliTimingData;
+
 typedef struct StromboliRenderSection {
 	VkCommandPool commandPools[MAX_SWAPCHAIN_IMAGES];
 	VkCommandBuffer commandBuffers[MAX_SWAPCHAIN_IMAGES];
@@ -227,7 +239,7 @@ inline static void renderSectionEndTimingSection(StromboliContext* context, Stro
 #endif
 }
 
-inline static VkCommandBuffer beginRenderSection(StromboliContext* context, StromboliRenderSection* section, u32 frameIndex, const char* name) {
+inline static VkCommandBuffer beginRenderSection(StromboliContext* context, StromboliRenderSection* section, u32 frameIndex, const char* name, StromboliTimingData* outTimingData) {
 	// Wait for fence
 	vkWaitForFences(context->device, 1, &section->fences[frameIndex], VK_TRUE, UINT64_MAX);
 	vkResetFences(context->device, 1, &section->fences[frameIndex]);
@@ -245,16 +257,21 @@ inline static VkCommandBuffer beginRenderSection(StromboliContext* context, Stro
 				double end = ((double)timestamps[endIndex]) * context->physicalDeviceProperties.limits.timestampPeriod * 1e-6;
 				float delta = (float)(end - begin);
 				section->timingEntries[frameIndex][i].duration = delta;
-				//printf("%s: %fms\n", section->timingEntries[frameIndex][i].name, delta);
+				if(outTimingData) {
+					outTimingData->entries[i].name = section->timingEntries[frameIndex][i].name;
+					outTimingData->entries[i].duration = section->timingEntries[frameIndex][i].duration;
+				}
+				//groundedPrintStringf("%s: %fms\n", section->timingEntries[frameIndex][i].name, delta);
 			}
 			section->durationOfLastCompletedInvocation = section->timingEntries[frameIndex][0].duration;
-		}
-		else {
+			if(outTimingData) {
+				outTimingData->totalDuration = section->durationOfLastCompletedInvocation;
+				outTimingData->entryCount = section->timingEntryCount[frameIndex];
+			}
+		} else {
 			section->durationOfLastCompletedInvocation = 0.0f;
 		}
 	}
-	//TODO: We still need a way to give the data to the caller as it gets overwritten with the renderSectionBeginTimingSection
-	// Maybe give it out to the user by the user providing a MemoryArena and a pointer to write the count into
 
 	// Begin command buffer
 	vkResetCommandPool(context->device, section->commandPools[frameIndex], 0);

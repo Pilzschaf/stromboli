@@ -1,6 +1,5 @@
 #include <stromboli/stromboli.h>
 #include <grounded/memory/grounded_arena.h>
-#include <grounded/file/grounded_file.h>
 
 #include <spirv_reflect.h>
 
@@ -16,7 +15,7 @@ typedef struct ShaderInfo {
     VkShaderStageFlagBits stage;
     VkPushConstantRange range;
     struct ShaderDescriptorSetInfo descriptorSets[4];
-    //StromboliSpecializationConstant constants[4]; //TODO: Current maximum of 4
+    StromboliSpecializationConstant constants[16];
 
     // Options that are only filled out depending on shader type
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo;
@@ -38,9 +37,9 @@ static inline bool startsWith(const char* s, const char* searchPattern) {
     return false;
 }
 
-static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena* arena, String8 filename, ShaderInfo* shaderInfo) {
-    u64 dataSize = 0;
-    u8* data = groundedReadFileImmutable(filename, &dataSize);
+static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena* arena, StromboliShaderSource source, ShaderInfo* shaderInfo) {
+    const u8* data = source.data;
+    u64 dataSize = source.size;
     ASSERT((dataSize % 4) == 0);
 
     VkShaderModule result;
@@ -55,10 +54,6 @@ static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena*
     SpvReflectResult error = spvReflectCreateShaderModule(dataSize, data, &reflectModule);
     ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
     (void)error;
-
-    groundedFreeFileImmutable(data, dataSize);
-    data = 0;
-    dataSize = 0;
 
     shaderInfo->stage = (VkShaderStageFlagBits)reflectModule.shader_stage;
     if(shaderInfo->stage == VK_SHADER_STAGE_VERTEX_BIT) {
@@ -173,7 +168,7 @@ static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena*
         }
     }
 
-    /*{ // Specialization constants
+    { // Specialization constants
         u32 numSpecializationConstants = 0;
         error = spvReflectEnumerateSpecializationConstants(&reflectModule, &numSpecializationConstants, 0);
         ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
@@ -186,10 +181,10 @@ static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena*
             ASSERT(index < ARRAY_COUNT(shaderInfo->constants));
             shaderInfo->constants[index].name = str8Copy(arena, name);
         }
-    }*/
+    }
 
     spvReflectDestroyShaderModule(&reflectModule);
-    STROMBOLI_NAME_OBJECT_EXPLICIT(context, result, VK_OBJECT_TYPE_SHADER_MODULE, str8GetCstr(arena, filename));
+    //STROMBOLI_NAME_OBJECT_EXPLICIT(context, result, VK_OBJECT_TYPE_SHADER_MODULE, str8GetCstr(arena, filename));
 
     return result;
 }
@@ -358,7 +353,7 @@ StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, stru
     ArenaTempMemory temp = arenaBeginTemp(scratch);
 
     ShaderInfo shaderInfo = {0};
-    VkShaderModule shaderModule = createShaderModule(context, scratch, parameters->filename, &shaderInfo);
+    VkShaderModule shaderModule = createShaderModule(context, scratch, parameters->source, &shaderInfo);
 
     VkPipelineShaderStageCreateInfo shaderStage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
     shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
@@ -402,9 +397,9 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
     ArenaTempMemory temp = arenaBeginTemp(scratch);
 
     ShaderInfo vertexShaderInfo = {0};
-    VkShaderModule vertexShaderModule = createShaderModule(context, scratch, parameters->vertexShaderFilename, &vertexShaderInfo);
+    VkShaderModule vertexShaderModule = createShaderModule(context, scratch, parameters->vertexShader, &vertexShaderInfo);
     ShaderInfo fragmentShaderInfo = {0};
-    VkShaderModule fragmentShaderModule = createShaderModule(context, scratch, parameters->fragmentShaderFilename, &fragmentShaderInfo);
+    VkShaderModule fragmentShaderModule = createShaderModule(context, scratch, parameters->fragmentShader, &fragmentShaderInfo);
 
     // Merge the shader infos into a single combined info
     ShaderInfo shaderInfos[] = {vertexShaderInfo, fragmentShaderInfo};
@@ -421,14 +416,14 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
         for(u32 i = 0; i < parameters->constantsCount; ++i) {
             s32 index = -1;
             //TODO: Once spirv reflect supports spec constants we can improve this by actually looking at the shader spec constant defines. We simply use i as index for now
-            /*for(u32 j = 0; j < ARRAY_COUNT(combinedInfo.constants); ++j) {
+            for(u32 j = 0; j < ARRAY_COUNT(combinedInfo.constants); ++j) {
                 if(combinedInfo.constants[j].name.size) {
                     if(str8IsEqual(combinedInfo.constants[j].name, parameters->constants[i].name)) {
                         index = j;
                         break;
                     }
                 }
-            }*/
+            }
             index = i;
             if(index >= 0) {
                 specializationEntries[index].constantID = i;
@@ -611,7 +606,6 @@ StromboliPipeline stromboliPipelineCreateGraphics(StromboliContext* context, str
     return result;
 }
 
-
 //TODO: Test pipeline with any hit shader
 StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct StromboliRaytracingPipelineParameters* parameters) {
     //TRACY_ZONE_HELPER(createRaytracingPipeline);
@@ -636,24 +630,24 @@ StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct Str
     VkRayTracingShaderGroupCreateInfoKHR* groups = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, totalGroupCount, VkRayTracingShaderGroupCreateInfoKHR);
     
     u32 currentShaderIndex = 0;
-    shaderModules[currentShaderIndex] = createShaderModule(context, scratch, str8FromCstr(parameters->raygenShaderFilename), &shaderInfos[currentShaderIndex]);
+    shaderModules[currentShaderIndex] = createShaderModule(context, scratch, parameters->raygenShader, &shaderInfos[currentShaderIndex]);
     currentShaderIndex++;
     for(u32 i = 0; i < parameters->missShaderCount; ++i) {
-        shaderModules[currentShaderIndex] = createShaderModule(context, scratch, str8FromCstr(parameters->missShaderFilenames[i]), &shaderInfos[currentShaderIndex]);
+        shaderModules[currentShaderIndex] = createShaderModule(context, scratch, parameters->missShaders[i], &shaderInfos[currentShaderIndex]);
         currentShaderIndex++;
     }
     for(u32 i = 0; i < parameters->hitShaderCount; ++i) {
-        shaderModules[currentShaderIndex] = createShaderModule(context, scratch, str8FromCstr(parameters->hitShaderFilenames[i]), &shaderInfos[currentShaderIndex]);
+        shaderModules[currentShaderIndex] = createShaderModule(context, scratch, parameters->hitShaders[i], &shaderInfos[currentShaderIndex]);
         currentShaderIndex++;
     }
     u32 firstIntersectionShaderIndex = currentShaderIndex;
     for(u32 i = 0; i < parameters->intersectionShaderCount; ++i) {
-        shaderModules[currentShaderIndex] = createShaderModule(context, scratch, str8FromCstr(parameters->intersectionShaders[i].filename), &shaderInfos[currentShaderIndex]);
+        shaderModules[currentShaderIndex] = createShaderModule(context, scratch, parameters->intersectionShaders[i].source, &shaderInfos[currentShaderIndex]);
         currentShaderIndex++;
     }
     u32 firstAnyHitShaderIndex = currentShaderIndex;
     for(u32 i = 0; i < parameters->anyHitShaderCount; ++i) {
-        shaderModules[currentShaderIndex] = createShaderModule(context, scratch, str8FromCstr(parameters->anyHitShaders[i].filename), &shaderInfos[currentShaderIndex]);
+        shaderModules[currentShaderIndex] = createShaderModule(context, scratch, parameters->anyHitShaders[i].source, &shaderInfos[currentShaderIndex]);
         currentShaderIndex++;
     }
     ASSERT(currentShaderIndex == totalShaderCount);
