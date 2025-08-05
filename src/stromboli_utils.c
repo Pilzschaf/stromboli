@@ -437,7 +437,7 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 
 	vkCreateBuffer(context->device, &createInfo, 0, &result.buffer);
 
-#ifndef VULKAN_NO_VMA
+#ifndef STROMBOLI_NO_VMA
 	if(!allocationContext) {
 		VmaAllocationCreateInfo allocInfo = {0};
 		allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
