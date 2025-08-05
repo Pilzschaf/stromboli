@@ -715,7 +715,7 @@ StromboliArenaAllocator stromboliCreateArenaAllocator(StromboliContext* context,
 	}
 	allocationInfo.allocationSize = size;
 	u32 memoryTypeBits = memoryProperties;
-	allocationInfo.memoryTypeIndex = stromboliFindMemoryType(context, memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	allocationInfo.memoryTypeIndex = stromboliFindMemoryType(context, memoryTypeBits, 0);
 	result.memoryTypeIndex = allocationInfo.memoryTypeIndex;
 	vkAllocateMemory(context->device, &allocationInfo, 0, &result.memory);
 	
