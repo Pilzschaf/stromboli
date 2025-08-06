@@ -436,3 +436,14 @@ static inline VkDescriptorSet createDescriptorSet(StromboliContext* context, Str
 	ASSERT(error == VK_SUCCESS);
 	return result;
 }
+
+static inline VkResult stomboliPresentImage(StromboliContext* context, StromboliSwapchain swapchain, VkSemaphore waitSemaphore, u32 imageIndex) {
+	VkPresentInfoKHR presentInfo = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
+    presentInfo.pImageIndices = &imageIndex;
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &swapchain.swapchain;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &waitSemaphore;
+    VkResult presentResult = vkQueuePresentKHR(context->graphicsQueues[0].queue, &presentInfo);
+	return presentResult;
+}
