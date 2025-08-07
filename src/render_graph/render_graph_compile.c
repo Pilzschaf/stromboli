@@ -481,10 +481,7 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
             // We have the exact same number of passes. This means we can just reuse the old command buffers as is
             MEMORY_COPY(result->commandBuffers, oldCommandBuffers, sizeof(VkCommandBuffer) * oldCommandBufferCountPerFrame * 2);
         } else if(result->commandBufferCountPerFrame < oldCommandBufferCountPerFrame) {
-            // Should not happen anymore as new scheme only grows!
-            // We require less than the previous graph. We have to keep in mind that the command buffers belong to two separate pools
-            //MEMORY_COPY(result->commandBuffers, oldCommandBuffers, sizeof(VkCommandBuffer) * result->passCount);
-            //MEMORY_COPY(result->commandBuffers+result->passCount, oldCommandBuffers + oldPassCount, sizeof(VkCommandBuffer) * result->passCount);
+            // Should not happen as new scheme only grows!
             ASSERT(false);
         } else {
             // We require new command buffers!

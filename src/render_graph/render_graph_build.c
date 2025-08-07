@@ -2,8 +2,6 @@
 
 #include "render_graph_definitions.inl"
 
-//#include <grounded/memory/grounded_memory.h>
-
 static u32 builderFingerprint;
 
 RenderGraphBuilder* createRenderGraphBuilder(StromboliContext* context, MemoryArena* arena) {
