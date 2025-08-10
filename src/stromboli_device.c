@@ -5,7 +5,6 @@
 
 #include <grounded/memory/grounded_arena.h>
 #include <grounded/threading/grounded_threading.h>
-#include <grounded/memory/grounded_memory.h>
 
 #include <stdio.h>
 
@@ -585,7 +584,6 @@ StromboliResult initStromboli(StromboliContext* context, StromboliInitialization
     if(!parameters) {
         // Those must be handled as readonly
         static StromboliInitializationParameters defaultParameters = {0};
-        ASSERT(MEMORY_IS_ZERO(&defaultParameters, sizeof(defaultParameters)));
         parameters = &defaultParameters;
     }
     ASSERT(parameters);

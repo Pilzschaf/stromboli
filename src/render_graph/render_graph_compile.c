@@ -2,7 +2,6 @@
 
 #include "render_graph_definitions.inl"
 
-#include <grounded/memory/grounded_memory.h>
 #include <stdio.h>
 
 static inline struct RenderGraphBuildPass* getPassAtIndex(struct RenderGraphBuildPass* firstPass, u32 index) {
@@ -79,8 +78,8 @@ static void sortPasses(RenderGraphBuilder* builder, u32 passCount, RenderGraph* 
                 sortedPasses[sortedCount].type = buildPass->type;
                 sortedPasses[sortedCount].inputCount = buildPass->inputCount;
                 sortedPasses[sortedCount].outputCount = buildPass->outputCount;
-                MEMORY_COPY_ARRAY(sortedPasses[sortedCount].inputs, buildPass->inputs);
-                MEMORY_COPY_ARRAY(sortedPasses[sortedCount].outputs, buildPass->outputs);
+                memcpy(sortedPasses[sortedCount].inputs, buildPass->inputs, sizeof(struct RenderAttachment) * ARRAY_COUNT(buildPass->inputs));
+                memcpy(sortedPasses[sortedCount].outputs, buildPass->outputs, sizeof(struct RenderAttachment) * ARRAY_COUNT(buildPass->outputs));
                 result->buildPassToSortedPass[passCount - passIndex - 1] = sortedCount++;
                 // Pop
                 stackSize--;

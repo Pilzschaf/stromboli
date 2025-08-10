@@ -1,6 +1,7 @@
 #include <grounded/window/grounded_window.h>
 #include <grounded/threading/grounded_threading.h>
 #include <grounded/memory/grounded_memory.h>
+#include <grounded/file/grounded_file.h>
 
 #include <stromboli/stromboli.h>
 
@@ -46,18 +47,28 @@ void recreateRenderpass(StromboliContext* context) {
 
 void resizeApplication(StromboliContext* context, u32 width, u32 height) {
     vkDeviceWaitIdle(context->device);
-    stromboliSwapchainResize(context, &swapchain, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT, width, height);
+    stromboliSwapchainResize(context, &swapchain, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT, width, height, true, false);
     recreateRenderpass(context);
 }
 
 void createResources(StromboliContext* context) {
     recreateRenderpass(context);
+    u64 vertexShaderSize = 0;
+    u8* vertexShader = groundedReadFileImmutable(STR8_LITERAL("examples/compute_clear/triangle.vert.spv"), &vertexShaderSize);
+    u64 fragmentShaderSize = 0;
+    u8* fragmentShader = groundedReadFileImmutable(STR8_LITERAL("examples/compute_clear/triangle.frag.spv"), &fragmentShaderSize);
     graphicsPipeline = stromboliPipelineCreateGraphics(context, &(struct StromboliGraphicsPipelineParameters) {
-        .vertexShaderFilename = STR8_LITERAL("examples/compute_clear/triangle.vert.spv"),
-        .fragmentShaderFilename = STR8_LITERAL("examples/compute_clear/triangle.frag.spv"),
+        .vertexShader = (StromboliShaderSource){.data = vertexShader, .size = vertexShaderSize},
+        .fragmentShader = (StromboliShaderSource){.data = fragmentShader, .size = fragmentShaderSize},
         .renderPass = renderPass.renderPass,
     });
-    computePipeline = stromboliPipelineCreateCompute(context, &(struct StromboliComputePipelineParameters){ .filename=STR8_LITERAL("examples/compute_clear/clear.comp.spv")});
+    groundedFreeFileImmutable(vertexShader, vertexShaderSize);
+    groundedFreeFileImmutable(fragmentShader, fragmentShaderSize);
+
+    u64 computeShaderSize = 0;
+    u8* computeShader = groundedReadFileImmutable(STR8_LITERAL("examples/compute_clear/clear.comp.spv"), &computeShaderSize);
+    computePipeline = stromboliPipelineCreateCompute(context, &(struct StromboliComputePipelineParameters){.source = (StromboliShaderSource){.data = computeShader, .size = computeShaderSize}});
+    groundedFreeFileImmutable(computeShader, computeShaderSize);
 
     graphicsSection = createRenderSection(context, &context->graphicsQueues[0]);
     computeSection = createRenderSection(context, &context->computeQueues[0]);
@@ -99,7 +110,7 @@ void destroyResources(StromboliContext* context) {
 void renderComputeFrame(StromboliContext* context) {
     u32 imageIndex = 0;
     static u32 frameIndex = 0;
-    VkCommandBuffer commandBuffer = beginRenderSection(context, &computeSection, frameIndex, "Compute");
+    VkCommandBuffer commandBuffer = beginRenderSection(context, &computeSection, frameIndex, "Compute", 0);
     VkResult acquireResult = vkAcquireNextImageKHR(context->device, swapchain.swapchain, UINT64_MAX, imageAcquireSemaphores[frameIndex], 0, &imageIndex);
     ASSERT(acquireResult == VK_SUCCESS);
 
@@ -146,7 +157,7 @@ void renderGraphicsFrame(StromboliContext* context) {
     static u32 frameIndex = 0;
     u32 imageIndex = 0;
     
-    VkCommandBuffer commandBuffer = beginRenderSection(context, &graphicsSection, frameIndex, "Graphics");
+    VkCommandBuffer commandBuffer = beginRenderSection(context, &graphicsSection, frameIndex, "Graphics", 0);
     {
         VkResult acquireResult = vkAcquireNextImageKHR(context->device, swapchain.swapchain, UINT64_MAX, imageAcquireSemaphores[frameIndex], 0, &imageIndex);
         ASSERT(acquireResult == VK_SUCCESS);
@@ -191,10 +202,14 @@ int main(int argc, char** argv) {
     });
 
     StromboliContext context = {0};
+    u32 instanceExtensionCount = 0;
+    const char** instanceExtensions = groundedWindowGetVulkanInstanceExtensions(&instanceExtensionCount);
+
     StromboliResult error = initStromboli(&context, &(StromboliInitializationParameters) {
         .applicationName = applicationName,
         .applicationMajorVersion = 1,
-        .platformGetRequiredNativeInstanceExtensions = groundedWindowGetVulkanInstanceExtensions,
+        .additionalInstanceExtensionCount = instanceExtensionCount,
+        .additionalInstanceExtensions = instanceExtensions,
         .enableValidation = true,
         .enableSynchronizationValidation = true,
         .synchronization2 = true,
@@ -207,7 +222,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    swapchain = stromboliSwapchainCreate(&context, groundedWindowGetVulkanSurface(window, context.instance), VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, groundedWindowGetWidth(window), groundedWindowGetHeight(window));
+    swapchain = stromboliSwapchainCreate(&context, groundedWindowGetVulkanSurface(window, context.instance), VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, groundedWindowGetWidth(window), groundedWindowGetHeight(window), true, false);
 
     createResources(&context);
 

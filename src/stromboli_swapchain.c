@@ -1,6 +1,5 @@
 #include <stromboli/stromboli.h>
 #include <grounded/memory/grounded_arena.h>
-#include <grounded/logger/grounded_logger.h>
 #include <grounded/threading/grounded_threading.h>
 
 #include <stdio.h>
