@@ -1,6 +1,7 @@
 
 #include "stromboli.h"
 #include <stromboli/stromboli_tracy.h>
+#include <grounded/threading/grounded_threading.h>
 
 static inline void stromboliNameObject(StromboliContext* context, u64 handle, VkObjectType type, const char* name) {
 	if (vkSetDebugUtilsObjectNameEXT) {
@@ -114,16 +115,25 @@ static inline void stromboliCmdSetViewportAndScissor(VkCommandBuffer commandBuff
 }
 
 static inline void stromboliCmdBeginRenderpass(VkCommandBuffer commandBuffer, StromboliRenderpass* renderpass, u32 width, u32 height, u32 imageIndex) {
+	MemoryArena* scratch = threadContextGetScratch(0);
+	ArenaTempMemory temp = arenaBeginTemp(scratch);
+	
 	VkRenderPassBeginInfo beginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
 	beginInfo.renderPass = renderpass->renderPass;
 	beginInfo.clearValueCount = renderpass->numClearColors;
-	beginInfo.pClearValues = renderpass->clearColors;
+	if(!renderpass->clearColors) {
+		beginInfo.pClearValues = ARENA_PUSH_ARRAY(scratch, renderpass->numClearColors, VkClearValue);
+	} else {
+		beginInfo.pClearValues = renderpass->clearColors;
+	}
 	beginInfo.framebuffer = renderpass->framebuffers[0];
 	beginInfo.renderArea.offset.x = 0;
 	beginInfo.renderArea.offset.y = 0;
 	beginInfo.renderArea.extent.width = width;
 	beginInfo.renderArea.extent.height = height;
 	vkCmdBeginRenderPass(commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	arenaEndTemp(temp);
 }
 
 #ifndef MAX_TIMING_SECTIONS_PER_RENDER_SECTION

@@ -2,8 +2,8 @@
 #include <grounded/memory/grounded_arena.h>
 #include <grounded/threading/grounded_threading.h>
 
-StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 width, u32 height, u32 subpassCount, StromboliSubpass* subpasses) {
-    MemoryArena* scratch = threadContextGetScratch(0);
+StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, MemoryArena* clearValueArena, u32 width, u32 height, u32 subpassCount, StromboliSubpass* subpasses) {
+    MemoryArena* scratch = threadContextGetScratch(clearValueArena);
     ArenaTempMemory tempMemory = arenaBeginTemp(scratch);
 
     // Only a single subpass allowed currently as things like dependencies must be ironed out
@@ -46,7 +46,11 @@ StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 wid
     }
 
     u32 currentClearColorIndex = 0;
-    VkClearValue* clearColors = (VkClearValue*)malloc(sizeof(VkClearValue) * maxNumClearColors);
+    // Arena may be 0 in which case we do no explicit clear values
+    VkClearValue* clearColors = 0;
+    if(clearValueArena) {
+        clearColors = ARENA_PUSH_ARRAY(clearValueArena, maxNumClearColors, VkClearValue);
+    }
     u32 currentReferenceIndex = 0;
     VkAttachmentReference* references = ARENA_PUSH_ARRAY(scratch, maxNumReferences, VkAttachmentReference);
     u32 currentAttachmentIndex = 0;
@@ -77,7 +81,9 @@ StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 wid
                 attachments[currentAttachmentIndex].initialLayout = a.initialLayout;
                 attachments[currentAttachmentIndex].finalLayout = a.finalLayout;
                 if(attachments[currentAttachmentIndex].loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR) {
-                    clearColors[currentClearColorIndex].color = a.clearColor.color;
+                    if(clearColors) {
+                        clearColors[currentClearColorIndex].color = a.clearColor.color;
+                    }
                     ++currentClearColorIndex;
                     ASSERT(currentClearColorIndex <= maxNumClearColors);
                 }
@@ -110,7 +116,9 @@ StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 wid
                 attachments[currentAttachmentIndex].initialLayout = a.initialLayout;
                 attachments[currentAttachmentIndex].finalLayout = a.finalLayout;
                 if(attachments[currentAttachmentIndex].loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR) {
-                    clearColors[currentClearColorIndex].depthStencil = subpasses[i].depthAttachment->clearColor.depthStencil;
+                    if(clearColors) {
+                        clearColors[currentClearColorIndex].depthStencil = subpasses[i].depthAttachment->clearColor.depthStencil;
+                    }
                     ++currentClearColorIndex;
                     ASSERT(currentClearColorIndex <= maxNumClearColors);
                 }
@@ -203,7 +211,6 @@ StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 wid
 }
 
 void stromboliRenderpassDestroy(StromboliContext* context, StromboliRenderpass* renderPass) {
-    free(renderPass->clearColors);
     for(u32 i = 0; i < MAX_SWAPCHAIN_IMAGES; ++i) {
         if(renderPass->framebuffers[i]) {
             vkDestroyFramebuffer(context->device, renderPass->framebuffers[i], 0);

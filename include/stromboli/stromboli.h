@@ -387,7 +387,7 @@ StromboliSwapchain stromboliSwapchainCreate(StromboliContext* context, VkSurface
 bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height, bool vsync, bool mailbox);
 void stromboliSwapchainDestroy(StromboliContext* context, StromboliSwapchain* swapchain);
 
-StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, u32 width, u32 height, u32 subpassCount, StromboliSubpass* subpasses);
+StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, struct MemoryArena* clearValueArena, u32 width, u32 height, u32 subpassCount, StromboliSubpass* subpasses);
 void stromboliRenderpassDestroy(StromboliContext* context, StromboliRenderpass* renderPass);
 
 StromboliPipeline stromboliPipelineCreateCompute(StromboliContext* context, struct StromboliComputePipelineParameters* parameters);
