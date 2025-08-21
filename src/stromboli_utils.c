@@ -686,9 +686,9 @@ static VkDeviceMemory stromboliArenaAllocatorAllocate(StromboliAllocationContext
 		offset = allocator->currentOffset;
 		allocator->currentOffset += memoryRequirements.size;
 
-		//TODO: Get actual alignment requirements
-		u64 alignment = 65536;
+		u64 alignment = memoryRequirements.alignment;
 		allocator->currentOffset = ALIGN_UP_POW2(allocator->currentOffset, alignment);
+		offset = allocator->currentOffset;
 	}
 
 	ASSUME(outOffset) {
