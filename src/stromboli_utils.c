@@ -118,7 +118,7 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 	allocateInfo.memoryTypeIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VkDeviceSize memoryOffset = 0;
 	if(allocationContext) {
-		result.memory = allocationContext->allocate(allocationContext, memoryRequirements, &memoryOffset, 0);
+		result.memory = allocationContext->allocate(allocationContext, memoryRequirements, &memoryOffset, 0, &result.allocationData);
 		result.allocator = allocationContext;
 	} else {
 		vkAllocateMemory(context->device, &allocateInfo, 0, &result.memory);
@@ -163,7 +163,7 @@ void stromboliImageDestroy(StromboliContext* context, StromboliImage* image) {
 #ifdef STROMBOLI_NO_VMA
 	vkDestroyImage(context->device, image->image, 0);
 	if(image->allocator) {
-		image->allocator->deallocate(image->allocator, image->memory);
+		image->allocator->deallocate(image->allocator, image->memory, &image->allocationData);
 		image->memory = 0;
 	}
 	if(image->memory) {
@@ -266,7 +266,7 @@ void stromboliDestroyBuffer(StromboliContext* context, StromboliBuffer* buffer) 
 	buffer->mapped = 0;
 	// Assumes that the buffer owns its own memory block
 	if(buffer->allocator) {
-		buffer->allocator->deallocate(buffer->allocator, buffer->memory);
+		buffer->allocator->deallocate(buffer->allocator, buffer->memory, buffer->allocationData);
 		buffer->memory = 0;
 	}
 	if(buffer->memory) {
@@ -463,7 +463,7 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 		VkDeviceSize memoryOffset = 0;
 		if(allocationContext) {
 			result.allocator = allocationContext;
-			result.memory = allocationContext->allocate(allocationContext, memoryRequirements, &memoryOffset, &result.mapped);
+			result.memory = allocationContext->allocate(allocationContext, memoryRequirements, &memoryOffset, &result.mapped, &result.allocationData);
 		} else {
 			vkAllocateMemory(context->device, &allocateInfo, 0, &result.memory);
 		}
@@ -675,7 +675,7 @@ VkSampler stromboliSamplerCreate(StromboliContext* context, bool linear, VkSampl
 	return result;
 }
 
-static VkDeviceMemory stromboliArenaAllocatorAllocate(StromboliAllocationContext* context, VkMemoryRequirements memoryRequirements, VkDeviceSize* outOffset, void** mapped) {
+static VkDeviceMemory stromboliArenaAllocatorAllocate(StromboliAllocationContext* context, VkMemoryRequirements memoryRequirements, VkDeviceSize* outOffset, void** mapped, void** allocationData) {
 	StromboliArenaAllocator* allocator = (StromboliArenaAllocator*)context;
 	VkDeviceMemory result = {0};
 	u64 offset = 0;
@@ -701,7 +701,7 @@ static VkDeviceMemory stromboliArenaAllocatorAllocate(StromboliAllocationContext
 	return result;
 }
 
-static void stromboliArenaAllocatorDeallocate(StromboliAllocationContext* context, VkDeviceMemory memory) {
+static void stromboliArenaAllocatorDeallocate(StromboliAllocationContext* context, VkDeviceMemory memory, void* allocationData) {
 	// Noop
 }
 

@@ -84,10 +84,7 @@ typedef struct StromboliBuffer {
     u64 size;
     void* mapped; // If this buffer is host visible this points to the buffer data
     struct StromboliAllocationContext* allocator;
-
-#ifndef STROMBOLI_NO_VMA
-    VmaAllocation allocation;
-#endif
+    void* allocationData;
 } StromboliBuffer;
 
 enum StromboliPipelineType {
@@ -146,9 +143,7 @@ typedef struct StromboliImage {
 
     VkDeviceMemory memory;
     struct StromboliAllocationContext* allocator;
-#ifndef STROMBOLI_NO_VMA
-    VmaAllocation allocation;
-#endif
+    void* allocationData;
 } StromboliImage;
 
 struct StromboliImageParameters {
@@ -366,8 +361,8 @@ typedef struct StromboliUploadContext {
 
 typedef struct StromboliAllocationContext {
     // mapped is optional
-    VkDeviceMemory (*allocate)(struct StromboliAllocationContext* allocator, VkMemoryRequirements memoryRequirements, VkDeviceSize* outOffset, void** mapped);
-    void (*deallocate)(struct StromboliAllocationContext* allocator, VkDeviceMemory memory);
+    VkDeviceMemory (*allocate)(struct StromboliAllocationContext* allocator, VkMemoryRequirements memoryRequirements, VkDeviceSize* outOffset, void** mapped, void** allocationData);
+    void (*deallocate)(struct StromboliAllocationContext* allocator, VkDeviceMemory memory, void* allocationData);
 } StromboliAllocationContext;
 
 typedef struct StromboliArenaAllocator {
