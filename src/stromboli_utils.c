@@ -80,17 +80,7 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 		createInfo.usage = usage;
 		createInfo.samples = samples;
 		createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		#ifdef STROMBOLI_NO_VMA
 		vkCreateImage(context->device, &createInfo, 0, &result.image);
-		#else
-		VmaAllocationCreateInfo allocInfo = {0};
-		allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-		if(parameters->requireCPUAccess) {
-			ASSERT(parameters->tiling == VK_IMAGE_TILING_LINEAR);
-			allocInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-		}
-		vmaCreateImage(context->vmaAllocator, &createInfo, &allocInfo, &result.image, &result.allocation, 0);
-		#endif
 	}
 
 	#ifdef STROMBOLI_NO_VMA
@@ -160,7 +150,6 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 
 void stromboliImageDestroy(StromboliContext* context, StromboliImage* image) {
 	vkDestroyImageView(context->device, image->view, 0);
-#ifdef STROMBOLI_NO_VMA
 	vkDestroyImage(context->device, image->image, 0);
 	if(image->allocator) {
 		image->allocator->deallocate(image->allocator, image->memory, &image->allocationData);
@@ -169,13 +158,6 @@ void stromboliImageDestroy(StromboliContext* context, StromboliImage* image) {
 	if(image->memory) {
 		vkFreeMemory(context->device, image->memory, 0);
 	}
-#else
-	if(image->allocation) {
-		vmaDestroyImage(context->vmaAllocator, image->image, image->allocation);
-	} else {
-		vkDestroyImage(context->device, image->image, 0);
-	}
-#endif
 }
 
 void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image, void* data, size_t size, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext) {
@@ -275,11 +257,8 @@ void stromboliDestroyBuffer(StromboliContext* context, StromboliBuffer* buffer) 
 		vkDestroyBuffer(context->device, buffer->buffer, 0);
 		return;
 	}
-#ifdef STROMBOLI_NO_VMA
+
 	vkDestroyBuffer(context->device, buffer->buffer, 0);
-#else
-	vmaDestroyBuffer(context->vmaAllocator, buffer->buffer, buffer->allocation);
-#endif
 }
 
 StromboliAccelerationStructure createAccelerationStructure(StromboliContext* context, u32 count, VkAccelerationStructureGeometryKHR* geometries, VkAccelerationStructureBuildRangeInfoKHR* buildRanges, bool allowUpdate, bool compact, StromboliUploadContext* uploadContext) {
@@ -610,7 +589,7 @@ void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploa
 }
 
 void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliImage* image, void* data, u64 size, u32 offsetX, u32 offsetY, u32 offsetZ, u32 width, u32 height, u32 depth, u32 inputStrideInPixels, u32 mipLevel, u32 layer, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext) {
-	//TRACY_ZONE_HELPER(uploadDataToImageSubregion);
+	TRACY_ZONE_HELPER(uploadDataToImageSubregion);
 
 	ASSERT((size % (width * height * depth)) == 0);
 
