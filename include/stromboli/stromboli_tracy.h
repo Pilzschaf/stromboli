@@ -73,6 +73,8 @@ struct SourceLocationData {
     uint32_t color;
 };
 
+extern u32 stromboliTracyContextCounter;
+
 static void calibrate(TracyStromboliContext* context, VkDevice device, int64_t* tCpu, int64_t* tGpu);
 static u32 nextQueryId(TracyStromboliContext* context);
 static TracyStromboliContext createTracyStromboliContext(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue queue, VkCommandBuffer cmdbuf, VkCommandPool commandPool, PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT _vkGetPhysicalDeviceCalibrateableTimeDomainsEXT, PFN_vkGetCalibratedTimestampsEXT _vkGetCalibratedTimestampsEXT);
@@ -87,8 +89,7 @@ static inline TracyStromboliContext createTracyStromboliContext(VkPhysicalDevice
     TracyStromboliContext result = {
         .device = device,
         .timeDomain = VK_TIME_DOMAIN_DEVICE_EXT,
-        .context = 0, //TODO: More contexts
-        //.context = getGpuCtxCounter().fetch_add(1, std::memory_order_relayer),
+        .context = stromboliTracyContextCounter++,
         .head = 0,
         .tail = 0,
         .oldCnt = 0,
@@ -317,7 +318,6 @@ static inline void tracyStromboliCollect(TracyStromboliContext* context, VkComma
 static inline u32 nextQueryId(TracyStromboliContext* context) {
     u32 id = context->head;
     context->head = ( context->head + 1 ) % context->queryCount;
-    assert( context->head != context->tail );
     return id;
 }
 

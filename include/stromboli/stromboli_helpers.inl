@@ -301,6 +301,7 @@ inline static void endRenderSection(StromboliContext* context, StromboliRenderSe
 	renderSectionEndTimingSection(context, section, frameIndex);
 	// This assert triggers if there is a non mathing number of renderSectionBeginTimingSection and renderSectionEndTimingSection
 	ASSERT(section->timingEntryCount[frameIndex] * 2 == section->queryEntryCount[frameIndex]);
+	collectTracyStromboli(section->commandBuffers[frameIndex]);
 	vkEndCommandBuffer(section->commandBuffers[frameIndex]);
 
 	// vkQueueSubmit2 allows semaphore signaling based on stage

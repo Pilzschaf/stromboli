@@ -5,8 +5,9 @@
 static VkCommandPool tracyCommandPool = 0;
 static VkCommandBuffer tracyCommandBuffer = 0;
 static TracyStromboliContext tracyContext = {0};
+u32 stromboliTracyContextCounter = 0;
 
-void initVulkanTracyContext(StromboliContext* context) {
+void initStromboliTracyContext(StromboliContext* context) {
     {
         VkCommandPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
         //createInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -23,14 +24,14 @@ void initVulkanTracyContext(StromboliContext* context) {
     tracyContext = TracyCVkContextCalibrated(context->physicalDevice, context->device, context->graphicsQueues[0].queue, tracyCommandBuffer, tracyCommandPool, vkGetPhysicalDeviceCalibrateableTimeDomainsEXT, vkGetCalibratedTimestampsEXT);
 }
 
-void destroyVulkanTracyContext(StromboliContext* context) {
+void destroyStromboliTracyContext(StromboliContext* context) {
     TracyCVkDestroy(&tracyContext);
     if(tracyCommandPool) {
         vkDestroyCommandPool(context->device, tracyCommandPool, 0);
     }
 }
 
-void collectTracyVulkan(VkCommandBuffer commandBuffer) {
+void collectTracyStromboli(VkCommandBuffer commandBuffer) {
     TracyCVkCollect(&tracyContext, commandBuffer);
 }
 

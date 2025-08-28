@@ -239,6 +239,8 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
     VkDeviceCreateInfo createInfo = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
     void** pNextChain = (void**)&createInfo.pNext;
 
+    bool descriptorIndexingExtension = false;
+
     // The maximum number of device extensions that can be added by the following code (excluding parameters->additionalDeviceExtensionCount)
     #define MAX_ADDED_DEVICE_EXTENSION_COUNT 64
     u32 requestedDeviceExtensionCount = parameters->additionalDeviceExtensionCount;
@@ -282,11 +284,14 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
     if(parameters->scalarBlockLayout && context->apiVersion < VK_API_VERSION_1_2) {
         requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME;
     }
-    if(parameters->nonUniformIndexingSampledImageArray && context->apiVersion < VK_API_VERSION_1_2) {
-        requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME;
-        if(context->apiVersion < VK_API_VERSION_1_1) {
-            // Required by VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
-            requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_MAINTENANCE3_EXTENSION_NAME;
+    if(context->apiVersion < VK_API_VERSION_1_2) {
+        descriptorIndexingExtension = parameters->nonUniformIndexingSampledImageArray || parameters->runtimeDescriptorArray || parameters->descriptorBindingVariableDescriptorCount || parameters->descriptorBindingSampledImageUpdateAfterBind || parameters->descriptorBindingUniformBufferUpdateAfterBind || parameters->descriptorBindingStorageBufferUpdateAfterBind || parameters->descriptorBindingStorageImageUpdateAfterBind || parameters->descriptorBindingPartiallyBound;
+        if(descriptorIndexingExtension) {
+            requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME;
+            if(context->apiVersion < VK_API_VERSION_1_1) {
+                // Required by VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
+                requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_MAINTENANCE3_EXTENSION_NAME;
+            }
         }
     }
     if(parameters->descriptorUpdateTemplate) { // Promoted to VK_API_VERSION_1_1
@@ -453,13 +458,18 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
             features12.storageBuffer8BitAccess = parameters->storageBuffer8BitAccess;
             *pNextChain = &features12;
             pNextChain = &features12.pNext;
-        } else {
-            //TODO: More parameters when descriptor indexing extension is enabled
-            if(parameters->nonUniformIndexingSampledImageArray) {
-                descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
-                *pNextChain = &descriptorIndexingFeatures;
-                pNextChain = &descriptorIndexingFeatures.pNext;
-            }
+        } else if(descriptorIndexingExtension) {
+            descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = parameters->nonUniformIndexingSampledImageArray;
+            descriptorIndexingFeatures.runtimeDescriptorArray = parameters->runtimeDescriptorArray;
+            descriptorIndexingFeatures.descriptorBindingVariableDescriptorCount = parameters->descriptorBindingVariableDescriptorCount;
+            descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = parameters->descriptorBindingSampledImageUpdateAfterBind;
+            descriptorIndexingFeatures.descriptorBindingUniformBufferUpdateAfterBind = parameters->descriptorBindingUniformBufferUpdateAfterBind;
+            descriptorIndexingFeatures.descriptorBindingStorageBufferUpdateAfterBind = parameters->descriptorBindingStorageBufferUpdateAfterBind;
+            descriptorIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind = parameters->descriptorBindingStorageImageUpdateAfterBind;
+            descriptorIndexingFeatures.descriptorBindingPartiallyBound = parameters->descriptorBindingPartiallyBound;
+
+            *pNextChain = &descriptorIndexingFeatures;
+            pNextChain = &descriptorIndexingFeatures.pNext;
         }
 
         if(context->apiVersion >= VK_API_VERSION_1_3) {
