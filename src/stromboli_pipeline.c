@@ -38,6 +38,9 @@ static inline bool startsWith(const char* s, const char* searchPattern) {
 }
 
 static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena* arena, StromboliShaderSource source, ShaderInfo* shaderInfo) {
+    MemoryArena* scratch = threadContextGetScratch(arena);
+    ArenaTempMemory temp = arenaBeginTemp(scratch);
+    
     const u8* data = source.data;
     u64 dataSize = source.size;
     ASSERT((dataSize % 4) == 0);
@@ -61,8 +64,7 @@ static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena*
         u32 inputVariableCount = 0;
         error = spvReflectEnumerateInputVariables(&reflectModule, &inputVariableCount, 0);
         ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
-        //TODO: Could use scratch for this allocation
-        SpvReflectInterfaceVariable** inputVariables = ARENA_PUSH_ARRAY(arena, inputVariableCount, SpvReflectInterfaceVariable*);
+        SpvReflectInterfaceVariable** inputVariables = ARENA_PUSH_ARRAY(scratch, inputVariableCount, SpvReflectInterfaceVariable*);
         error = spvReflectEnumerateInputVariables(&reflectModule, &inputVariableCount, inputVariables);
         ASSERT(error == SPV_REFLECT_RESULT_SUCCESS);
         
@@ -186,6 +188,7 @@ static VkShaderModule createShaderModule(StromboliContext* context, MemoryArena*
     spvReflectDestroyShaderModule(&reflectModule);
     //STROMBOLI_NAME_OBJECT_EXPLICIT(context, result, VK_OBJECT_TYPE_SHADER_MODULE, str8GetCstr(arena, filename));
 
+    arenaEndTemp(temp);
     return result;
 }
 
@@ -270,12 +273,11 @@ ShaderInfo combineShaderInfos(u32 shaderInfoCount, ShaderInfo* shaderInfos) {
         result.range.stageFlags |= info->stage;
 
         // Specialization constants
-        //TODO:
-        /*for(u32 j = 0; j < ARRAY_COUNT(result.constants); ++j) {
+        for(u32 j = 0; j < ARRAY_COUNT(result.constants); ++j) {
             if(shaderInfos[i].constants[j].name.size) {
                 result.constants[j].name = shaderInfos[i].constants[j].name;
             }
-        }*/
+        }
     }
 
     return result;
