@@ -239,7 +239,10 @@ void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image
 void stromboliDestroyBuffer(StromboliContext* context, StromboliBuffer* buffer) {
 	#ifndef STROMBOLI_NO_VMA
 	if(buffer->mapped && !buffer->memory) {
-		vmaUnmapMemory(context->vmaAllocator, buffer->allocation);
+		VmaAllocation allocation = (VmaAllocation) buffer->allocationData;
+		ASSUME(allocation) {
+			vmaUnmapMemory(context->vmaAllocator, allocation);
+		}
 		// Unmapping should not be necessary?
 		//vkUnmapMemory(context->device, buffer->memory);
 	}
@@ -420,9 +423,11 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 	if(!allocationContext) {
 		VmaAllocationCreateInfo allocInfo = {0};
 		allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-		vmaCreateBuffer(context->vmaAllocator, &createInfo, &allocInfo, &result.buffer, &result.allocation, 0);
+		VmaAllocation allocation = 0;
+		vmaCreateBuffer(context->vmaAllocator, &createInfo, &allocInfo, &result.buffer, &allocation, 0);
 		//vmaAllocateMemoryForBuffer(context->vmaAllocator, buffer->buffer, &allocInfo, &buffer->allocation, 0);
-		vmaMapMemory(context->vmaAllocator, result.allocation, &result.mapped);
+		vmaMapMemory(context->vmaAllocator, allocation, &result.mapped);
+		result.allocationData = allocation;
 	} else
 #endif
 	{

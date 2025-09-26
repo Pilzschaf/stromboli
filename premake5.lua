@@ -56,41 +56,6 @@ workspace "Stromboli"
     filter "configurations:Release"
         runtime "Release"
         symbols "off"
-    
-
-project "ComputeClear"
-    files
-    {
-        "examples/compute_clear/main.c",
-    }
-    links
-    {
-        "StromboliStatic",
-        "GroundedStatic",
-        "vma",
-    }
-    filter "system:linux"
-        links
-        {
-            "stdc++",
-        }
-
-project "Triangle"
-    files
-    {
-        "examples/triangle/main.c",
-    }
-    links
-    {
-        "StromboliStatic",
-        "GroundedStatic",
-        "vma",
-    }
-    filter "system:linux"
-        links
-        {
-            "stdc++",
-        }
 
 project "GroundedStatic"
     kind "StaticLib"
