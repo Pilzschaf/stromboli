@@ -823,14 +823,13 @@ StromboliPipeline createRaytracingPipeline(StromboliContext* context, struct Str
 
 void stromboliPipelineDestroy(StromboliContext* context, StromboliPipeline* pipeline) {
     for(u32 i = 0; i < ARRAY_COUNT(pipeline->descriptorLayouts); ++i) {
-        // We assume here that we created the layout ourselves, when an update template exists for it!
         if(pipeline->updateTemplates[i]) {
             vkDestroyDescriptorSetLayout(context->device, pipeline->descriptorLayouts[i], 0);
             if(pipeline->updateTemplates[i] != (VkDescriptorUpdateTemplate)1) {
                 vkDestroyDescriptorUpdateTemplateKHR(context->device, pipeline->updateTemplates[i], 0);
             }
         } else {
-            vkDestroyDescriptorSetLayout(context->device, pipeline->descriptorLayouts[i], 0);
+            // We assume here that we created the layout ourselves, when an update template exists for it!
         }
     }
     vkDestroyPipelineLayout(context->device, pipeline->layout, 0);

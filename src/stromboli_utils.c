@@ -268,8 +268,10 @@ void stromboliDestroyBuffer(StromboliContext* context, StromboliBuffer* buffer) 
 		}
 		// Unmapping should not be necessary?
 		//vkUnmapMemory(context->device, buffer->memory);
+		buffer->mapped = 0;
+		vmaDestroyBuffer(context->vmaAllocator, buffer->buffer, allocation);
 	}
-	#endif
+	#else
 	
 	buffer->mapped = 0;
 	// Assumes that the buffer owns its own memory block
@@ -285,6 +287,7 @@ void stromboliDestroyBuffer(StromboliContext* context, StromboliBuffer* buffer) 
 	}
 
 	vkDestroyBuffer(context->device, buffer->buffer, 0);
+	#endif
 }
 
 StromboliAccelerationStructure createAccelerationStructure(StromboliContext* context, u32 count, VkAccelerationStructureGeometryKHR* geometries, VkAccelerationStructureBuildRangeInfoKHR* buildRanges, bool allowUpdate, bool compact, StromboliUploadContext* uploadContext) {
