@@ -1,3 +1,4 @@
+
 #include <stromboli/stromboli.h>
 #include <stdio.h>
 
@@ -80,7 +81,19 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 		createInfo.usage = usage;
 		createInfo.samples = samples;
 		createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		#ifdef STROMBOLI_NO_VMA
 		vkCreateImage(context->device, &createInfo, 0, &result.image);
+		#else
+		VmaAllocationCreateInfo allocInfo = {0};
+		allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+		if(parameters->requireCPUAccess) {
+			ASSERT(parameters->tiling == VK_IMAGE_TILING_LINEAR);
+			allocInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+		}
+		VmaAllocation allocation = 0;
+		vmaCreateImage(context->vmaAllocator, &createInfo, &allocInfo, &result.image, &allocation, 0);
+		result.allocationData = allocation;
+		#endif
 	}
 
 	#ifdef STROMBOLI_NO_VMA
@@ -113,7 +126,7 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 	} else {
 		vkAllocateMemory(context->device, &allocateInfo, 0, &result.memory);
 	}
-	vkBindImageMemory(context->device, result.image, result.memory, memoryOffset);
+	vkBindImageMemory(context->device, result.image, result.memory, memoryOffset);s
 	#endif
 
 	VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -150,6 +163,15 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 
 void stromboliImageDestroy(StromboliContext* context, StromboliImage* image) {
 	vkDestroyImageView(context->device, image->view, 0);
+	#ifndef STROMBOLI_NO_VMA
+	VmaAllocation allocation = (VmaAllocation) image->allocationData;
+	if(allocation) {
+		vmaDestroyImage(context->vmaAllocator, image->image, allocation);
+	} else {
+		vkDestroyImage(context->device, image->image, 0);
+	}
+	#else
+
 	vkDestroyImage(context->device, image->image, 0);
 	if(image->allocator) {
 		image->allocator->deallocate(image->allocator, image->memory, &image->allocationData);
@@ -158,6 +180,7 @@ void stromboliImageDestroy(StromboliContext* context, StromboliImage* image) {
 	if(image->memory) {
 		vkFreeMemory(context->device, image->memory, 0);
 	}
+	#endif
 }
 
 void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image, void* data, size_t size, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext) {
@@ -415,9 +438,7 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 	StromboliBuffer result = {0};
 	VkBufferCreateInfo createInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
 	createInfo.size = size;
-	createInfo.usage = usage;
-
-	vkCreateBuffer(context->device, &createInfo, 0, &result.buffer);
+	createInfo.usage = usage;	
 
 #ifndef STROMBOLI_NO_VMA
 	if(!allocationContext) {
@@ -431,6 +452,8 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 	} else
 #endif
 	{
+		vkCreateBuffer(context->device, &createInfo, 0, &result.buffer);
+
 		VkMemoryRequirements memoryRequirements;
 		vkGetBufferMemoryRequirements(context->device, result.buffer, &memoryRequirements);
 		u32 memoryIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, memoryProperties);

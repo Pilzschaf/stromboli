@@ -6,17 +6,15 @@
 #include <grounded/memory/grounded_arena.h>
 #include <grounded/threading/grounded_threading.h>
 
-#include <stdio.h>
-
 VkBool32 VKAPI_CALL debugReportCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT messageTypes, const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData) {
 	if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-        printf("Vulkan Error: %s\n", callbackData->pMessage);
+        groundedPrintStringf("Vulkan Error: %s\n", callbackData->pMessage);
         return VK_FALSE;
 	} else if(severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-		printf("Vulkan Warning: %s\n", callbackData->pMessage);
+		groundedPrintStringf("Vulkan Warning: %s\n", callbackData->pMessage);
         return VK_FALSE;
 	} else {
-        printf("Vulkan Info: %s\n", callbackData->pMessage);
+        groundedPrintStringf("Vulkan Info: %s\n", callbackData->pMessage);
         return VK_FALSE;
     }
 	return VK_FALSE;
@@ -72,7 +70,7 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
                         u32 major = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
                         u32 minor = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
                         u32 patch = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
-                        printf("Enabling Khronos validation layer. Spec version: %u.%u.%u\n", major, minor, patch);
+                        groundedPrintStringf("Enabling Khronos validation layer. Spec version: %u.%u.%u\n", major, minor, patch);
                         foundValidationLayers = true;
                         break;
                     }
@@ -145,7 +143,7 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
                     if(strcmp(requestedInstanceExtensions[i], "VK_EXT_validation_features") == 0) {
                         // Ignore as this extension is only provided by the layer and not the instance directly
                     } else {
-                        printf("Could not find vulkan instance extension %s\n", requestedInstanceExtensions[i]);
+                        groundedPrintStringf("Could not find vulkan instance extension %s\n", requestedInstanceExtensions[i]);
                         error = STROMBOLI_MAKE_ERROR(STROMBOLI_INSTANCE_CREATE_ERROR, "Could not find vulkan instance extension");
                     }
                 }
@@ -328,10 +326,10 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
                         }
                     }
                     if (!found) {
-                        printf("Could not find device extension %s\n", requestedDeviceExtensions[i]);
+                        groundedPrintStringf("Could not find device extension %s\n", requestedDeviceExtensions[i]);
                         applicable = false;
                         // Do not break here so we can list all missing requested device extensions
-                        printf("GPU %s not used because extension %s is missing\n", properties.deviceName, requestedDeviceExtensions[i]);
+                        groundedPrintStringf("GPU %s not used because extension %s is missing\n", properties.deviceName, requestedDeviceExtensions[i]);
                     }
                 }
             }
@@ -339,7 +337,7 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
             if(applicable) {
                 context->physicalDevice = physicalDevices[i];
                 vkGetPhysicalDeviceProperties(context->physicalDevice, &context->physicalDeviceProperties);
-                printf("Selected GPU: %s\n", context->physicalDeviceProperties.deviceName);
+                groundedPrintStringf("Selected GPU: %s\n", context->physicalDeviceProperties.deviceName);
 
                 vkGetPhysicalDeviceFeatures(context->physicalDevice, &context->physicalDeviceFeatures);
                 context->physicalDeviceLimits = context->physicalDeviceProperties.limits;
@@ -606,7 +604,7 @@ StromboliResult initStromboli(StromboliContext* context, StromboliInitialization
 
     if(STROMBOLI_ERROR(error)) {
         shutdownStromboli(context);
-        printf("Error initializing Vulkan: %s\n", error.errorString.base);
+        groundedPrintStringf("Error initializing Vulkan: %s\n", error.errorString.base);
     } else {
         ASSERT(context->graphicsQueues);
     }
