@@ -1,6 +1,6 @@
 [submodule "libs/grounded"]
 	path = libs/grounded
-	url = https://github.com/Pilzschaf/grounded.git
+	url = git@github.com:Pilzschaf/grounded.git
 	branch = main
 	update = rebase
 [submodule "libs/volk"]
