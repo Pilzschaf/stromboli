@@ -11,9 +11,6 @@ static VkDeviceMemory stromboliVmaAllocatorAllocate(StromboliAllocationContext* 
     StromboliVmaAllocator* allocator = (StromboliVmaAllocator*)context;
     VmaAllocationInfo vmaAllocationInfo = {0};
     VmaAllocationCreateInfo createInfo = {0};
-    //if((memoryProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) || (memoryProperties & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)) {
-    //    createInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
-    //}
     // We can always set mapped bit as it is simply ignored on devices where device local is not mappable eg. dedicated GPUs
     createInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
     createInfo.requiredFlags = memoryProperties;

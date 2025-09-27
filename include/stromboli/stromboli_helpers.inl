@@ -458,3 +458,61 @@ static inline VkResult stomboliPresentImage(StromboliContext* context, Stromboli
     VkResult presentResult = vkQueuePresentKHR(context->graphicsQueues[0].queue, &presentInfo);
 	return presentResult;
 }
+
+// https://polyhaven.com/hdris/skies
+static inline StromboliImage stromboliCreateCubemapFromEquirectangularPanorama(StromboliContext* context, VkFormat format, u32 cubemapSize, u8* panoramaData, u32 panoramaWidth, u32 panoramaHeight, StromboliAllocationContext* allocationContext) {
+    MemoryArena* scratch = threadContextGetScratch(0);
+    ArenaTempMemory temp = arenaBeginTemp(scratch);
+
+    StromboliImage result = stromboliImageCreate(context, cubemapSize, cubemapSize, format, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &(struct StromboliImageParameters) {
+        .cubemap = true,
+        .layerCount = 6,
+    }, allocationContext);
+
+    StromboliUploadContext uploadContext = createUploadContext(context, &context->graphicsQueues[0], 0);
+    u64 size = cubemapSize * cubemapSize * 4;
+    u32* faceData = ARENA_PUSH_ARRAY(scratch, cubemapSize * cubemapSize, u32);
+    for(u32 face = 0; face < 6; ++face) {
+        for (u32 y = 0; y < cubemapSize; ++y) {
+            for (u32 x = 0; x < cubemapSize; ++x) {
+                float u = (x + 0.5f) / cubemapSize;
+                float v = (y + 0.5f) / cubemapSize;
+                float nx = 2.0f * u - 1.0f;
+                float ny = 2.0f * v - 1.0f;
+
+                float dir[3];
+                switch (face) {
+                    case 0: dir[0] = 1; dir[1] = -ny; dir[2] = -nx; break; // +X
+                    case 1: dir[0] = -1; dir[1] = -ny; dir[2] = nx; break; // -X
+                    case 2: dir[0] = nx; dir[1] = 1; dir[2] = ny; break; // +Y
+                    case 3: dir[0] = nx, dir[1] = -1; dir[2] = -ny; break; // -Y
+                    case 4: dir[0] = nx, dir[1] = -ny; dir[2] = 1; break; // +Z
+                    case 5: dir[0] = -nx; dir[1] = -ny; dir[2] = -1; break; // -Z
+                }
+				// Normalize
+				float dirLength = sqrtf(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
+                dir[0] /= dirLength;
+				dir[1] /= dirLength;
+				dir[2] /= dirLength;
+
+                float phi = atan2(dir[2], dir[0]);
+                float theta = acos(dir[1]);
+                float u2 = (phi + PI32) / (2.0f * PI32);
+                float v2 = theta / PI32;
+
+                // Sample panorama at u2, v2
+                u32 sampleX = CLAMP(0, (u32)(u2 * panoramaWidth), panoramaWidth - 1);
+                u32 sampleY = CLAMP(0, (u32)(v2 * panoramaHeight), panoramaHeight - 1);
+                u32 pixel = ((u32*)panoramaData)[sampleX + sampleY * panoramaWidth];
+                faceData[x + y * cubemapSize] = pixel;
+            }
+        }
+        
+        stromboliUploadDataToImageSubregion(context, &result, faceData, size, 0, 0, 0, cubemapSize, cubemapSize, 1, cubemapSize, 0, face, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, &uploadContext);
+    }
+
+    destroyUploadContext(context, &uploadContext);
+
+    arenaEndTemp(temp);
+    return result;
+}
