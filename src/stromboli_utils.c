@@ -81,22 +81,10 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 		createInfo.usage = usage;
 		createInfo.samples = samples;
 		createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		#ifdef STROMBOLI_NO_VMA
+
 		vkCreateImage(context->device, &createInfo, 0, &result.image);
-		#else
-		VmaAllocationCreateInfo allocInfo = {0};
-		allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-		if(parameters->requireCPUAccess) {
-			ASSERT(parameters->tiling == VK_IMAGE_TILING_LINEAR);
-			allocInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-		}
-		VmaAllocation allocation = 0;
-		vmaCreateImage(context->vmaAllocator, &createInfo, &allocInfo, &result.image, &allocation, 0);
-		result.allocationData = allocation;
-		#endif
 	}
 
-	#ifdef STROMBOLI_NO_VMA
 	VkMemoryRequirements memoryRequirements;
 	if(!vkGetImageMemoryRequirements2) {
 		vkGetImageMemoryRequirements(context->device, result.image, &memoryRequirements);
@@ -121,13 +109,12 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 	allocateInfo.memoryTypeIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VkDeviceSize memoryOffset = 0;
 	if(allocationContext) {
-		result.memory = allocationContext->allocate(allocationContext, memoryRequirements, &memoryOffset, 0, &result.allocationData);
+		result.memory = allocationContext->allocate(allocationContext, memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &memoryOffset, 0, &result.allocationData);
 		result.allocator = allocationContext;
 	} else {
 		vkAllocateMemory(context->device, &allocateInfo, 0, &result.memory);
 	}
-	vkBindImageMemory(context->device, result.image, result.memory, memoryOffset);s
-	#endif
+	vkBindImageMemory(context->device, result.image, result.memory, memoryOffset);
 
 	VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 	if(isDepthFormat(format)) {
@@ -163,24 +150,15 @@ StromboliImage stromboliImageCreate(StromboliContext* context, u32 width, u32 he
 
 void stromboliImageDestroy(StromboliContext* context, StromboliImage* image) {
 	vkDestroyImageView(context->device, image->view, 0);
-	#ifndef STROMBOLI_NO_VMA
-	VmaAllocation allocation = (VmaAllocation) image->allocationData;
-	if(allocation) {
-		vmaDestroyImage(context->vmaAllocator, image->image, allocation);
-	} else {
-		vkDestroyImage(context->device, image->image, 0);
-	}
-	#else
 
 	vkDestroyImage(context->device, image->image, 0);
 	if(image->allocator) {
-		image->allocator->deallocate(image->allocator, image->memory, &image->allocationData);
+		image->allocator->deallocate(image->allocator, image->memory, image->allocationData);
 		image->memory = 0;
 	}
 	if(image->memory) {
 		vkFreeMemory(context->device, image->memory, 0);
 	}
-	#endif
 }
 
 void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image, void* data, size_t size, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext) {
@@ -260,18 +238,6 @@ void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image
 }
 
 void stromboliDestroyBuffer(StromboliContext* context, StromboliBuffer* buffer) {
-	#ifndef STROMBOLI_NO_VMA
-	if(buffer->mapped && !buffer->memory) {
-		VmaAllocation allocation = (VmaAllocation) buffer->allocationData;
-		ASSUME(allocation) {
-			vmaUnmapMemory(context->vmaAllocator, allocation);
-		}
-		// Unmapping should not be necessary?
-		//vkUnmapMemory(context->device, buffer->memory);
-		buffer->mapped = 0;
-		vmaDestroyBuffer(context->vmaAllocator, buffer->buffer, allocation);
-	}
-	#else
 	
 	buffer->mapped = 0;
 	// Assumes that the buffer owns its own memory block
@@ -287,7 +253,6 @@ void stromboliDestroyBuffer(StromboliContext* context, StromboliBuffer* buffer) 
 	}
 
 	vkDestroyBuffer(context->device, buffer->buffer, 0);
-	#endif
 }
 
 StromboliAccelerationStructure createAccelerationStructure(StromboliContext* context, u32 count, VkAccelerationStructureGeometryKHR* geometries, VkAccelerationStructureBuildRangeInfoKHR* buildRanges, bool allowUpdate, bool compact, StromboliUploadContext* uploadContext) {
@@ -443,38 +408,29 @@ StromboliBuffer stromboliCreateBuffer(StromboliContext* context, uint64_t size, 
 	createInfo.size = size;
 	createInfo.usage = usage;	
 
-#ifndef STROMBOLI_NO_VMA
-	if(!allocationContext) {
-		VmaAllocationCreateInfo allocInfo = {0};
-		allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-		VmaAllocation allocation = 0;
-		vmaCreateBuffer(context->vmaAllocator, &createInfo, &allocInfo, &result.buffer, &allocation, 0);
-		//vmaAllocateMemoryForBuffer(context->vmaAllocator, buffer->buffer, &allocInfo, &buffer->allocation, 0);
-		vmaMapMemory(context->vmaAllocator, allocation, &result.mapped);
-		result.allocationData = allocation;
-	} else
-#endif
 	{
 		vkCreateBuffer(context->device, &createInfo, 0, &result.buffer);
 
+		//TODO: Check for dedicated allocation
 		VkMemoryRequirements memoryRequirements;
 		vkGetBufferMemoryRequirements(context->device, result.buffer, &memoryRequirements);
-		u32 memoryIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, memoryProperties);
-		ASSERT(memoryIndex != UINT32_MAX);
-
-		//VkMemoryAllocateFlagsInfo allocateFlags = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO};
-		//allocateFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
-
-		VkMemoryAllocateInfo allocateInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-		//allocateInfo.pNext = &allocateFlags;
-		allocateInfo.allocationSize = memoryRequirements.size;
-		allocateInfo.memoryTypeIndex = memoryIndex;
 
 		VkDeviceSize memoryOffset = 0;
 		if(allocationContext) {
 			result.allocator = allocationContext;
-			result.memory = allocationContext->allocate(allocationContext, memoryRequirements, &memoryOffset, &result.mapped, &result.allocationData);
+			result.memory = allocationContext->allocate(allocationContext, memoryRequirements, memoryProperties, &memoryOffset, &result.mapped, &result.allocationData);
 		} else {
+			u32 memoryIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, memoryProperties);
+			ASSERT(memoryIndex != UINT32_MAX);
+
+			//VkMemoryAllocateFlagsInfo allocateFlags = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO};
+			//allocateFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+
+			VkMemoryAllocateInfo allocateInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+			//allocateInfo.pNext = &allocateFlags;
+			allocateInfo.allocationSize = memoryRequirements.size;
+			allocateInfo.memoryTypeIndex = memoryIndex;
+
 			vkAllocateMemory(context->device, &allocateInfo, 0, &result.memory);
 		}
 
@@ -685,7 +641,7 @@ VkSampler stromboliSamplerCreate(StromboliContext* context, bool linear, VkSampl
 	return result;
 }
 
-static VkDeviceMemory stromboliArenaAllocatorAllocate(StromboliAllocationContext* context, VkMemoryRequirements memoryRequirements, VkDeviceSize* outOffset, void** mapped, void** allocationData) {
+static VkDeviceMemory stromboliArenaAllocatorAllocate(StromboliAllocationContext* context, VkMemoryRequirements memoryRequirements, VkMemoryPropertyFlags memoryProperties, VkDeviceSize* outOffset, void** mapped, void** allocationData) {
 	StromboliArenaAllocator* allocator = (StromboliArenaAllocator*)context;
 	VkDeviceMemory result = {0};
 	u64 offset = 0;

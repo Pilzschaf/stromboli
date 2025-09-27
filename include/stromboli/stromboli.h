@@ -4,10 +4,6 @@
 #include <grounded/string/grounded_string.h>
 #include <volk/volk.h>
 
-#ifndef STROMBOLI_NO_VMA
-#include <vk_mem_alloc.h>
-#endif
-
 #define STROMBOLI_SUCCESS() ((StromboliResult){0})
 #define STROMBOLI_MAKE_ERROR(code, text) ((StromboliResult){code, STR8_LITERAL(text)})
 #define STROMBOLI_ERROR(result) (result.error)
@@ -47,10 +43,6 @@ typedef struct StromboliContext {
     u32 graphicsQueueCount; // Graphics queues always support present. Other queues might depening on their flags
     u32 computeQueueCount;
     u32 transferQueueCount;
-
-#ifndef STROMBOLI_NO_VMA
-    VmaAllocator vmaAllocator;
-#endif
 } StromboliContext;
 
 typedef enum StromboliErrorCode {
@@ -361,7 +353,7 @@ typedef struct StromboliUploadContext {
 
 typedef struct StromboliAllocationContext {
     // mapped is optional
-    VkDeviceMemory (*allocate)(struct StromboliAllocationContext* allocator, VkMemoryRequirements memoryRequirements, VkDeviceSize* outOffset, void** mapped, void** allocationData);
+    VkDeviceMemory (*allocate)(struct StromboliAllocationContext* allocator, VkMemoryRequirements memoryRequirements, VkMemoryPropertyFlags memoryProperties, VkDeviceSize* outOffset, void** mapped, void** allocationData);
     void (*deallocate)(struct StromboliAllocationContext* allocator, VkDeviceMemory memory, void* allocationData);
 } StromboliAllocationContext;
 

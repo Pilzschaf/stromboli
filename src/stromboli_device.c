@@ -539,48 +539,6 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
         arenaEndTemp(temp);
     }
 
-#ifndef STROMBOLI_NO_VMA
-    if(STROMBOLI_NO_ERROR(error)) { // Create vma allocator
-        VmaVulkanFunctions vmaFunctions = {0};
-        vmaFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
-        vmaFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
-        vmaFunctions.vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties;
-        vmaFunctions.vkGetPhysicalDeviceMemoryProperties = vkGetPhysicalDeviceMemoryProperties;
-        vmaFunctions.vkAllocateMemory = vkAllocateMemory;
-        vmaFunctions.vkFreeMemory = vkFreeMemory;
-        vmaFunctions.vkMapMemory = vkMapMemory;
-        vmaFunctions.vkUnmapMemory = vkUnmapMemory;
-        vmaFunctions.vkFlushMappedMemoryRanges = vkFlushMappedMemoryRanges;
-        vmaFunctions.vkInvalidateMappedMemoryRanges = vkInvalidateMappedMemoryRanges;
-        vmaFunctions.vkBindBufferMemory = vkBindBufferMemory;
-        vmaFunctions.vkBindImageMemory = vkBindImageMemory;
-        vmaFunctions.vkGetBufferMemoryRequirements = vkGetBufferMemoryRequirements;
-        vmaFunctions.vkGetImageMemoryRequirements = vkGetImageMemoryRequirements;
-        vmaFunctions.vkCreateBuffer = vkCreateBuffer;
-        vmaFunctions.vkDestroyBuffer = vkDestroyBuffer;
-        vmaFunctions.vkCreateImage = vkCreateImage;
-        vmaFunctions.vkDestroyImage = vkDestroyImage;
-        vmaFunctions.vkCmdCopyBuffer = vkCmdCopyBuffer;
-        vmaFunctions.vkGetBufferMemoryRequirements2KHR = vkGetBufferMemoryRequirements2;
-        vmaFunctions.vkGetImageMemoryRequirements2KHR = vkGetImageMemoryRequirements2;
-        vmaFunctions.vkBindBufferMemory2KHR = vkBindBufferMemory2;
-        vmaFunctions.vkBindImageMemory2KHR = vkBindImageMemory2;
-        vmaFunctions.vkGetPhysicalDeviceMemoryProperties2KHR = vkGetPhysicalDeviceMemoryProperties2;
-        vmaFunctions.vkGetDeviceBufferMemoryRequirements = vkGetDeviceBufferMemoryRequirements;
-        vmaFunctions.vkGetDeviceImageMemoryRequirements = vkGetDeviceImageMemoryRequirements;
-        VmaAllocatorCreateInfo createInfo = {0};
-        if(parameters->bufferDeviceAddress) {
-            createInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-        }
-        createInfo.vulkanApiVersion = context->apiVersion;
-        createInfo.physicalDevice = context->physicalDevice;
-        createInfo.device = context->device;
-        createInfo.instance = context->instance;
-        createInfo.pVulkanFunctions = &vmaFunctions;
-        vmaCreateAllocator(&createInfo, &context->vmaAllocator);
-    }
-#endif
-
     arenaEndTemp(temp);
     return error;
 }
@@ -614,12 +572,6 @@ StromboliResult initStromboli(StromboliContext* context, StromboliInitialization
 }
 
 void shutdownStromboli(StromboliContext* context) {
-#ifndef STROMBOLI_NO_VMA
-    if(context->vmaAllocator) {
-        vmaDestroyAllocator(context->vmaAllocator);
-    }
-#endif
-
     if(context->device) {
         vkDestroyDevice(context->device, 0);
     }
