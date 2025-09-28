@@ -7,16 +7,24 @@
 #include <grounded/threading/grounded_threading.h>
 
 VkBool32 VKAPI_CALL debugReportCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT messageTypes, const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData) {
-	if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-        groundedPrintStringf("Vulkan Error: %s\n", callbackData->pMessage);
-        return VK_FALSE;
+	// This callback could be called from other implicit threads we do not control. 
+    // Therefore we are not guaranteed to have a thread local arena available
+    // So we use groundedPrintString instead of groundedPrintStringf
+    
+    if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+        groundedPrintString(STR8_LITERAL("Vulkan Error: "));
+        groundedPrintString(str8FromCstr(callbackData->pMessage));
+        groundedPrintString(STR8_LITERAL("\n"));
 	} else if(severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-		groundedPrintStringf("Vulkan Warning: %s\n", callbackData->pMessage);
-        return VK_FALSE;
+        groundedPrintString(STR8_LITERAL("Vulkan Warning: "));
+		groundedPrintString(str8FromCstr(callbackData->pMessage));
+        groundedPrintString(STR8_LITERAL("\n"));
 	} else {
-        groundedPrintStringf("Vulkan Info: %s\n", callbackData->pMessage);
-        return VK_FALSE;
+        groundedPrintString(STR8_LITERAL("Vulkan Info: "));
+        groundedPrintString(str8FromCstr(callbackData->pMessage));
+        groundedPrintString(STR8_LITERAL("\n"));
     }
+    
 	return VK_FALSE;
 }
 

@@ -126,7 +126,7 @@ static inline void stromboliCmdBeginRenderpass(VkCommandBuffer commandBuffer, St
 	} else {
 		beginInfo.pClearValues = renderpass->clearColors;
 	}
-	beginInfo.framebuffer = renderpass->framebuffers[0];
+	beginInfo.framebuffer = renderpass->framebuffers[imageIndex];
 	beginInfo.renderArea.offset.x = 0;
 	beginInfo.renderArea.offset.y = 0;
 	beginInfo.renderArea.extent.width = width;
