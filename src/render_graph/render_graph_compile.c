@@ -160,13 +160,18 @@ StromboliImage renderGraphAllocateFramebuffer(RenderGraph* graph, StromboliConte
     }
 
     // Asking for requirements already requires image
-    VkImageMemoryRequirementsInfo2 memoryInfo = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2};
-	memoryInfo.image = result.image;
-	VkMemoryDedicatedRequirements dedicatedRequirements = {VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS};
-	VkMemoryRequirements2 imageMemoryRequirements = {VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
-	imageMemoryRequirements.pNext = &dedicatedRequirements;
-	vkGetImageMemoryRequirements2(context->device, &memoryInfo, &imageMemoryRequirements);
-    VkMemoryRequirements memoryRequirements = imageMemoryRequirements.memoryRequirements;
+    VkMemoryRequirements memoryRequirements = {0};
+    if(vkGetImageMemoryRequirements2) {
+        VkImageMemoryRequirementsInfo2 memoryInfo = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2};
+        memoryInfo.image = result.image;
+        VkMemoryDedicatedRequirements dedicatedRequirements = {VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS};
+        VkMemoryRequirements2 imageMemoryRequirements = {VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
+        imageMemoryRequirements.pNext = &dedicatedRequirements;
+        vkGetImageMemoryRequirements2(context->device, &memoryInfo, &imageMemoryRequirements);
+        memoryRequirements = imageMemoryRequirements.memoryRequirements;
+    } else {
+        vkGetImageMemoryRequirements(context->device, result.image, &memoryRequirements);
+    }
 
     // Check if we have an available block. Otherwise allocate a new one!
     struct RenderGraphMemoryBlock* memoryBlock = graph->firstBlock;

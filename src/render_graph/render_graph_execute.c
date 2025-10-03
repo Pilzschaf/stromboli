@@ -90,7 +90,7 @@ RenderGraphPass* beginRenderPass(RenderGraph* graph, RenderGraphPassHandle passH
                 }
             }
             //stromboliCmdBeginRenderpass(pass->commandBuffer, &pass->renderpass, pass->width, pass->height, 0);
-            vkCmdBeginRendering(commandBuffer, &renderingInfo);
+            vkCmdBeginRenderingKHR(commandBuffer, &renderingInfo);
         } else {
             for(u32 i = 0; i < pass->outputCount; ++i) {
                 struct RenderAttachment output = pass->outputs[i];
@@ -212,7 +212,7 @@ bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFen
         VkCommandBuffer commandBuffer = graph->sortedPasses[i].commandBuffer;
         ASSERT(commandBuffer); // If this triggers, this pass has not been submitted!
         if(graph->sortedPasses[i].type == RENDER_GRAPH_PASS_TYPE_GRAPHICS) {
-            vkCmdEndRendering(commandBuffer);
+            vkCmdEndRenderingKHR(commandBuffer);
         }
 
         if(i == graph->swapchainOutputPassIndex) {

@@ -274,6 +274,14 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
     }
     if(parameters->dynamicRendering && context->apiVersion < VK_API_VERSION_1_3) {
         requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME;
+        if(context->apiVersion < VK_API_VERSION_1_2) {
+            if(context->apiVersion < VK_API_VERSION_1_1) {
+                requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_MULTIVIEW_EXTENSION_NAME;
+                requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_MAINTENANCE2_EXTENSION_NAME;
+            }
+            requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME;
+            requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME;
+        }
     }
     if(parameters->dynamicRenderingUnusedAttachments && context->apiVersion < VK_API_VERSION_1_3) {
         requestedDeviceExtensions[requestedDeviceExtensionCount++] = VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME;
@@ -443,6 +451,7 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
         VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR};
         VkPhysicalDeviceAccelerationStructureFeaturesKHR asFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
         VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR};
+        VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR};
         VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynamicRenderingUnusedAttachmentsFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT};
         VkPhysicalDeviceDescriptorIndexingFeaturesEXT descriptorIndexingFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES};
         VkPhysicalDeviceSynchronization2FeaturesKHR synchronization2Features = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR};
@@ -485,10 +494,17 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
             features13.maintenance4 = parameters->maintenance4;
             *pNextChain = &features13;
             pNextChain = &features13.pNext;
-        } else if(parameters->synchronization2) {
-            synchronization2Features.synchronization2 = true;
-            *pNextChain = &synchronization2Features;
-            pNextChain = &synchronization2Features.pNext;
+        } else {
+            if(parameters->synchronization2) {
+                synchronization2Features.synchronization2 = true;
+                *pNextChain = &synchronization2Features;
+                pNextChain = &synchronization2Features.pNext;
+            } 
+            if(parameters->dynamicRendering) {
+                dynamicRenderingFeatures.dynamicRendering = true;
+                *pNextChain = &dynamicRenderingFeatures;
+                pNextChain = &dynamicRenderingFeatures.pNext;
+            }
         }
 
         if(parameters->rayQuery) {
