@@ -237,12 +237,14 @@ static struct RenderGraphMemoryBlock* copyAndResetMemoryBlockList(MemoryArena* a
     struct RenderGraphMemoryBlock** nextPointerLocation = &result;
     while(memoryBlock) {
         struct RenderGraphMemoryBlock* newBlock = ARENA_PUSH_STRUCT_NO_CLEAR(arena, struct RenderGraphMemoryBlock);
-        MEMORY_COPY_STRUCT(newBlock, memoryBlock);
-        newBlock->next = 0;
-        newBlock->offset = 0;
-        *nextPointerLocation = newBlock;
-        nextPointerLocation = &newBlock->next;
-        memoryBlock = memoryBlock->next;
+        ASSUME(newBlock) {
+            MEMORY_COPY_STRUCT(newBlock, memoryBlock);
+            newBlock->next = 0;
+            newBlock->offset = 0;
+            *nextPointerLocation = newBlock;
+            nextPointerLocation = &newBlock->next;
+            memoryBlock = memoryBlock->next;
+        }
     }
 
     return result;
