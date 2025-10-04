@@ -510,6 +510,6 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
     }
 
     // We do not need the builder memory after this point as everything is stored in the RenderGraph arena
-    arenaResetToMarker(builder->resetMarker);
+    // Memory should be cleared as part of frameArena reset in application frame loop
     return result;
 }

@@ -125,7 +125,6 @@ struct RenderGraph {
 
 struct RenderGraphBuilder {
     MemoryArena* arena;
-    ArenaMarker resetMarker;
     struct RenderGraphBuildPass passSentinel;
     struct RenderGraphBuildImage imageSentinel;
     StromboliContext* context;

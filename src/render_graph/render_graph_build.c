@@ -4,13 +4,13 @@
 
 static u32 builderFingerprint;
 
-RenderGraphBuilder* createRenderGraphBuilder(StromboliContext* context, MemoryArena* arena) {
-    ArenaMarker resetMarker = arenaCreateMarker(arena);
-    RenderGraphBuilder* result = ARENA_PUSH_STRUCT(arena, RenderGraphBuilder);
+// Arena is used for building the graph. The compile step then uses its own arena stored as part of the render graph
+// You are responsible to reset the frameArena memory sometime after RenderGraph has been compiled
+RenderGraphBuilder* createRenderGraphBuilder(StromboliContext* context, MemoryArena* frameArena) {
+    RenderGraphBuilder* result = ARENA_PUSH_STRUCT(frameArena, RenderGraphBuilder);
     if(result) {
-        result->arena = arena;
+        result->arena = frameArena;
         result->context = context;
-        result->resetMarker = resetMarker;
         result->currentPassIndex = 1;
         result->fingerprint = builderFingerprint;
     }

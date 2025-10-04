@@ -44,7 +44,7 @@ struct RenderPassOutputParameters {
 };
 
 // Build
-RenderGraphBuilder* createRenderGraphBuilder(StromboliContext* context, MemoryArena* arena);
+RenderGraphBuilder* createRenderGraphBuilder(StromboliContext* context, MemoryArena* frameArena);
 RenderGraphPassHandle renderGraphAddGraphicsPass(RenderGraphBuilder* builder, String8 name);
 RenderGraphPassHandle renderGraphAddTransferPass(RenderGraphBuilder* builder, String8 name);
 RenderGraphPassHandle renderGraphAddComputePass(RenderGraphBuilder* builder, String8 name);
@@ -62,7 +62,7 @@ u32 renderGraphImageGetHeight(RenderGraphBuilder* builder, RenderGraphImageHandl
 VkSampleCountFlags renderGraphImageGetSampleCount(RenderGraphBuilder* builder, RenderGraphImageHandle imageHandle);
 //RenderGraphImageHandle renderGraphImageResolve(RenderGraphBuilder* builder, RenderGraphImageHandle image); // Resolves a multi sampled image into a nonmultisampled image (or does nothing if input is not multisampled)
 
-// Compile
+// Compile. RenderGraph uses its own arena after this so you are save to reset the arena used for the builder
 RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHandle swapchainOutput, RenderGraph* oldGraph);
 void renderGraphDestroy(RenderGraph* graph, VkFence fence);
 

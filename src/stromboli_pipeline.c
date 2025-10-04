@@ -269,8 +269,10 @@ ShaderInfo combineShaderInfos(u32 shaderInfoCount, ShaderInfo* shaderInfos) {
         }
 
         // Push constants
-        result.range.size = MAX(result.range.size, info->range.size);
-        result.range.stageFlags |= info->stage;
+        if(info->range.size > 0) {
+            result.range.size = MAX(result.range.size, info->range.size);
+            result.range.stageFlags |= info->stage;
+        }
 
         // Specialization constants
         for(u32 j = 0; j < ARRAY_COUNT(result.constants); ++j) {
