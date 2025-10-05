@@ -62,6 +62,11 @@ void stromboliFrameDescriptorInit(StromboliContext* context) {
     }*/
 }
 
+void stromboliFrameDescriptorIsActive() {
+    bool result = stromboliFrameDescriptor.framePools[0].pool != 0;
+    return result;
+}
+
 void stromboliFrameDescriptorShutdown(StromboliContext* context) {
     for(u32 i = 0; i < ARRAY_COUNT(stromboliFrameDescriptor.framePools); ++i) {
         vkDestroyDescriptorPool(context->device, stromboliFrameDescriptor.framePools[i].pool, 0);

@@ -331,6 +331,8 @@ static VkPipelineLayout createPipelineLayout(StromboliContext* context, ShaderIn
             descriptorLayouts[i] = createSetLayout(context, &shaderInfo->descriptorSets[i]);
             if(vkCreateDescriptorUpdateTemplateKHR) {
                 descriptorUpdateTemplates[i] = createDescriptorUpdateTemplate(context, &shaderInfo->descriptorSets[i], descriptorLayouts[i], i, bindPoint);
+            } else {
+                descriptorUpdateTemplates[i] = (VkDescriptorUpdateTemplate)(1); // Special value indicating that we have to destroy this layout
             }
         } else {
             // We have to create a stub descriptor set layout

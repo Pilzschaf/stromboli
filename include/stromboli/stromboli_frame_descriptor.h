@@ -7,6 +7,7 @@
 void stromboliFrameDescriptorInit(StromboliContext* context);
 void stromboliFrameDescriptorShutdown(StromboliContext* context);
 void stromboliFrameDescriptorBeginNewFrame(StromboliContext* context, MemoryArena* nextFrameArena, u32 frameIndex);
+void stromboliFrameDescriptorIsActive();
 
 VkDescriptorSet stromboliGetDescriptorSetForPipeline(StromboliContext* context, StromboliPipeline* pipeline, u32 setIndex, u32 frameIndex);
 void stromboliUpdateAndBindDescriptorSetForPipeline(StromboliContext* context, VkCommandBuffer commandBuffer, StromboliPipeline* pipeline, u32 setIndex, u32 frameIndex, StromboliDescriptorInfo* descriptors);
