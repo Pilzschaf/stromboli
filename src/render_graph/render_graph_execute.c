@@ -294,6 +294,7 @@ bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFen
     return true;
 }
 
+// Result in seconds
 float renderGraphGetLastDuration(RenderGraph* graph) {
     float result = 0.0f;
     if(graph) {

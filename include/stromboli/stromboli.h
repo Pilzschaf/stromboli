@@ -218,6 +218,7 @@ typedef struct StromboliInitializationParameters {
     bool descriptorBindingStorageBufferUpdateAfterBind;
     bool descriptorBindingStorageImageUpdateAfterBind;
     bool descriptorBindingPartiallyBound;
+    bool memoryBudget;
 } StromboliInitializationParameters;
 
 struct StromboliAttachment {
