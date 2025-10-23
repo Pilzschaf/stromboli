@@ -140,6 +140,7 @@ static bool createSwapchain(StromboliContext* context, StromboliSwapchain* swapc
 			swapchain->format = format;
 			swapchain->width = surfaceCapabilities.currentExtent.width;
 			swapchain->height = surfaceCapabilities.currentExtent.height;
+			swapchain->usage = usage;
 		}
 
         if(!error) { // Acquire swapchain images
@@ -205,6 +206,6 @@ void stromboliSwapchainDestroy(StromboliContext* context, StromboliSwapchain* sw
     swapchain->swapchain = 0;
 }
 
-bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height, bool vsync, bool mailbox) {
-	return createSwapchain(context, swapchain, usage, width, height, vsync, mailbox);
+bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, u32 width, u32 height, bool vsync, bool mailbox) {
+	return createSwapchain(context, swapchain, swapchain->usage, width, height, vsync, mailbox);
 }

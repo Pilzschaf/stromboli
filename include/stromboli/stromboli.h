@@ -65,6 +65,7 @@ typedef struct StromboliSwapchain {
     u32 height;
     VkFormat format;
     u32 numImages;
+    VkImageUsageFlags usage;
 
     VkImage images[MAX_SWAPCHAIN_IMAGES];
     VkImageView imageViews[MAX_SWAPCHAIN_IMAGES];
@@ -372,7 +373,7 @@ void shutdownStromboli(StromboliContext* context);
 
 StromboliSwapchain stromboliSwapchainCreate(StromboliContext* context, VkSurfaceKHR surface, VkImageUsageFlags usage, u32 width, u32 height, bool vsync, bool mailbox);
 // Resizing of swapchain recreates images, image views etc. stored in the swapchain. Swapchain should not be in use anymore
-bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, VkImageUsageFlags usage, u32 width, u32 height, bool vsync, bool mailbox);
+bool stromboliSwapchainResize(StromboliContext* context, StromboliSwapchain* swapchain, u32 width, u32 height, bool vsync, bool mailbox);
 void stromboliSwapchainDestroy(StromboliContext* context, StromboliSwapchain* swapchain);
 
 StromboliRenderpass stromboliRenderpassCreate(StromboliContext* context, struct MemoryArena* clearValueArena, u32 width, u32 height, u32 subpassCount, StromboliSubpass* subpasses);
