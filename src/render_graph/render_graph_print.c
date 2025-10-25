@@ -3,7 +3,7 @@
 #include "render_graph_definitions.inl"
 
 #include <stdio.h>
-#include <vulkan/vk_enum_string_helper.h>
+#include "../vulkan_enum_string_helper.h"
 
 void renderGraphBuilderPrint(RenderGraphBuilder* builder) {
     // Print all passes with all inputs and outputs

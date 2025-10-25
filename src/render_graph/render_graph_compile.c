@@ -269,7 +269,7 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
         imageDeleteQueue = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, oldGraph->imageCount, StromboliImage);
         imageDeleteCount = oldGraph->imageCount;
         MEMORY_COPY(imageDeleteQueue, oldGraph->images, sizeof(StromboliImage) * imageDeleteCount);
-        ASSERT(!oldGraph->imageDeleteCount);
+        ASSERT(!oldGraph->imageDeleteCount); // Did you call renderGraphExecute?
         firstBlock = copyAndResetMemoryBlockList(scratch, oldGraph->firstBlock);
         arenaResetToMarker(oldGraph->resetMarker);
         result = oldGraph;
