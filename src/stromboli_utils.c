@@ -649,12 +649,9 @@ static VkDeviceMemory stromboliArenaAllocatorAllocate(StromboliAllocationContext
 		//u32 memoryTypeIndex = stromboliFindMemoryType(context, memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		//ASSERT(memoryTypeIndex == allocator.memoryTypeIndex);
 		result = allocator->memory;
-		offset = allocator->currentOffset;
-		allocator->currentOffset += memoryRequirements.size;
-
 		u64 alignment = memoryRequirements.alignment;
-		allocator->currentOffset = ALIGN_UP_POW2(allocator->currentOffset, alignment);
-		offset = allocator->currentOffset;
+		offset = ALIGN_UP_POW2(allocator->currentOffset, alignment);
+		allocator->currentOffset = offset + memoryRequirements.size;
 	}
 
 	ASSUME(outOffset) {
