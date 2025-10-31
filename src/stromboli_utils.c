@@ -578,7 +578,7 @@ void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploa
 void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliImage* image, void* data, u64 size, u32 offsetX, u32 offsetY, u32 offsetZ, u32 width, u32 height, u32 depth, u32 inputStrideInPixels, u32 mipLevel, u32 layer, VkImageLayout finalLayout, VkAccessFlags dstAccessMask, StromboliUploadContext* uploadContext) {
 	TRACY_ZONE_HELPER(uploadDataToImageSubregion);
 
-	ASSERT((size % (width * height * depth)) == 0);
+	ASSERT((size % (inputStrideInPixels * height * depth)) == 0);
 
 	// Make sure we have an upload context
 	StromboliUploadContext uc = ensureValidUploadContext(context, uploadContext);
@@ -586,7 +586,9 @@ void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliIma
 
 	// Upload with staging buffer
 	VkCommandBuffer commandBuffer = ensureUploadContextIsRecording(context, uploadContext);
+	//ASSERT(inputStrideInPixels == width);
 	u64 scratchOffset = uploadToScratch(context, uploadContext, data, size);
+	//scratchOffset = uploadToScratchWithStride()
 
 	{ // Prepare target texture for transfer
 		VkImageMemoryBarrier2 imageBarrier = stromboliCreateImageBarrier(image->image, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
