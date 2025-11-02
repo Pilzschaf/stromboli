@@ -581,7 +581,6 @@ void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliIma
 	if(!inputStrideInPixels) {
 		inputStrideInPixels = width;
 	}
-	ASSERT((size % (inputStrideInPixels * height * depth)) == 0);
 
 	// Make sure we have an upload context
 	StromboliUploadContext uc = ensureValidUploadContext(context, uploadContext);
