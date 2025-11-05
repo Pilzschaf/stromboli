@@ -275,7 +275,9 @@ RenderGraph* renderGraphCompile(RenderGraphBuilder* builder, RenderGraphImageHan
         result = oldGraph;
     } else {
         result = ARENA_BOOTSTRAP_PUSH_STRUCT(createGrowingArena(osGetMemorySubsystem(), KB(4)), RenderGraph, arena);
+        #if defined(GROUNDED_ARENA_OVERFLOW_CHECK) && GROUNDED_ARENA_OVERFLOW_CHECK
         enableDebugMemoryOverflowDetectForArena(&result->arena);
+        #endif
         result->resetMarker = arenaCreateMarker(&result->arena);
     }
 
