@@ -37,6 +37,10 @@ RenderGraphPass* beginRenderPass(RenderGraph* graph, RenderGraphPassHandle passH
             graph->timestampCount++;
         }
 
+        #ifdef TRACY_ENABLE
+        pass->tracyScope = createTracyStromboliScopeAllocSource( getTracyContext(), __LINE__, __FILE__, strlen( __FILE__ ), __FUNCTION__, strlen(__FUNCTION__), (const char*)pass->name.base, pass->name.size, commandBuffer, true);
+        #endif
+
         // Layout transitions
         stromboliPipelineBarrier(commandBuffer, 0, 0, 0, pass->imageBarrierCount, pass->imageBarriers);
         
@@ -255,6 +259,11 @@ bool renderGraphExecute(RenderGraph* graph, StromboliSwapchain* swapchain, VkFen
             vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, graph->queryPools[0], 1);
             graph->timestampCount++;
         }
+
+        #ifdef TRACY_ENABLE
+            destroyTracyStromboliScope(&graph->sortedPasses[i].tracyScope);
+        #endif
+        collectTracyStromboli(commandBuffer);
 
         vkEndCommandBuffer(commandBuffer);
     }

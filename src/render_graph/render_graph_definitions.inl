@@ -87,6 +87,10 @@ struct RenderGraphPass {
 
     u32 afterClearBarrierCount;
     VkImageMemoryBarrier2KHR* afterClearBarriers;
+
+#ifdef TRACY_ENABLE
+    TracyStromboliScope tracyScope;
+#endif
 };
 
 struct RenderGraph {
