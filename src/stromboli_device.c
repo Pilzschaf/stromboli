@@ -424,7 +424,7 @@ StromboliResult initVulkanDevice(StromboliContext* context, StromboliInitializat
         }
 
         // Transfer queues
-        if(parameters->transferQueueRequestCount > 0) {
+        if(parameters->transferQueueRequestCount > 0 && availableTransferQueueCount > 0) {
             queueCreateInfos[queueCreateInfoCount] = (VkDeviceQueueCreateInfo){ VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
             queueCreateInfos[queueCreateInfoCount].queueFamilyIndex = transferQueueIndex;
             queueCreateInfos[queueCreateInfoCount].queueCount = MIN(availableTransferQueueCount, parameters->transferQueueRequestCount);

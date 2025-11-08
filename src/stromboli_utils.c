@@ -171,7 +171,7 @@ void stromboliUploadDataToImage(StromboliContext* context, StromboliImage* image
 
 	// Upload with staging buffer
 	VkCommandBuffer commandBuffer = ensureUploadContextIsRecording(context, uploadContext);
-	u64 scratchOffset = uploadToScratch(context, uploadContext, data, size);
+	u64 scratchOffset = uploadToScratch(context, uploadContext, data, size, 4);
 
 	{
 		if(vkCmdPipelineBarrier2) {
@@ -497,7 +497,7 @@ VkCommandBuffer ensureUploadContextIsRecording(StromboliContext* context, Stromb
 }
 
 // Returns UINT64_MAX if there is no space left to fit this upload request
-u64 tryUploadToScratch(StromboliContext* context, StromboliUploadContext* uploadContext, void* data, u64 size) {
+u64 tryUploadToScratch(StromboliContext* context, StromboliUploadContext* uploadContext, void* data, u64 size, u64 alignment) {
 	if(uploadContext->flags & STROMBOLI_UPLOAD_CONTEXT_SUBMIT_ACTIVE) {
         flushUploadContext(context, uploadContext);
 		beginRecordUploadContext(context, uploadContext);
@@ -510,26 +510,27 @@ u64 tryUploadToScratch(StromboliContext* context, StromboliUploadContext* upload
 		uploadContext->flags |= STROMBOLI_UPLOAD_CONTEXT_OWNS_BUFFER;
 	}
 
-	u64 newOffset = uploadContext->scratchOffset + size;
+	ASSERT(IS_POW2(alignment));
+	u64 result = ALIGN_UP_POW2(uploadContext->scratchOffset, alignment);
+	u64 newOffset = result + size;
     if(newOffset > uploadContext->scratch->size) {
 		return UINT64_MAX;
 	}
-	memcpy(((uint8_t*)uploadContext->scratch->mapped)+uploadContext->scratchOffset, data, size);
-    u64 result = uploadContext->scratchOffset;
+	memcpy(((uint8_t*)uploadContext->scratch->mapped)+result, data, size);
     uploadContext->scratchOffset = newOffset;
 	return result;
 }
 
 // May auto flush to fit the data
 // Returns UINT64_MAX if the scratch buffer is too small.
-u64 uploadToScratch(StromboliContext* context, StromboliUploadContext* uploadContext, void* data, u64 size) {
-	u64 result = tryUploadToScratch(context, uploadContext, data, size);
+u64 uploadToScratch(StromboliContext* context, StromboliUploadContext* uploadContext, void* data, u64 size, u64 alignment) {
+	u64 result = tryUploadToScratch(context, uploadContext, data, size, alignment);
 	if(result == UINT64_MAX) {
 		// No space left so auto flush upload context
 		flushUploadContext(context, uploadContext);
 		beginRecordUploadContext(context, uploadContext);
 
-		result = tryUploadToScratch(context, uploadContext, data, size);
+		result = tryUploadToScratch(context, uploadContext, data, size, alignment);
 		// Whole scratch buffer too small to fit the data
 		ASSERT(result != UINT64_MAX);
 	}
@@ -559,7 +560,7 @@ void submitUploadContext(StromboliContext* context, StromboliUploadContext* uplo
 }
 
 void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext) {
-	//TRACY_ZONE_HELPER(flushUploadContext);
+	TRACY_ZONE_HELPER(flushUploadContext);
 
     if(uploadContext->flags & STROMBOLI_UPLOAD_CONTEXT_RECORDING) {
 		// Auto submit if flush is called
@@ -588,7 +589,7 @@ void stromboliUploadDataToImageSubregion(StromboliContext* context, StromboliIma
 
 	// Upload with staging buffer
 	VkCommandBuffer commandBuffer = ensureUploadContextIsRecording(context, uploadContext);
-	u64 scratchOffset = uploadToScratch(context, uploadContext, data, size);
+	u64 scratchOffset = uploadToScratch(context, uploadContext, data, size, 4);
 
 	{ // Prepare target texture for transfer
 		VkImageMemoryBarrier2 imageBarrier = stromboliCreateImageBarrier(image->image, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, dstAccessMask, finalLayout, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);

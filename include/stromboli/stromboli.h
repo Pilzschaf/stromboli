@@ -409,7 +409,7 @@ void destroyUploadContext(StromboliContext* context, StromboliUploadContext* upl
 StromboliUploadContext ensureValidUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext);
 void beginRecordUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext);
 VkCommandBuffer ensureUploadContextIsRecording(StromboliContext* context, StromboliUploadContext* uploadContext);
-u64 uploadToScratch(StromboliContext* context, StromboliUploadContext* uploadContext, void* data, u64 size);
+u64 uploadToScratch(StromboliContext* context, StromboliUploadContext* uploadContext, void* data, u64 size, u64 alignment);
 void submitUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext, u32 signalSemaphoreCount, VkSemaphore* signalSemaphores);
 void flushUploadContext(StromboliContext* context, StromboliUploadContext* uploadContext);
 bool isDepthFormat(VkFormat format);

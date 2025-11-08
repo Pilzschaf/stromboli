@@ -72,6 +72,7 @@ static bool createSwapchain(StromboliContext* context, StromboliSwapchain* swapc
 				for(u32 i = 0; i < numPresentModes; ++i) {
 					if(availablePresentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
 						supportsMailbox = true;
+						break;
 					}
 				}
 			}
@@ -79,19 +80,41 @@ static bool createSwapchain(StromboliContext* context, StromboliSwapchain* swapc
 	}
 
     if(!error) {
+		// If we are in LDR here is almost no reason to use a non SRGB swapchain format
+		// Therefore in the base case here we simply use the first 8bit SRGB format in the list
+		// For HDR applications this is more involved and I would like to move those into its own createSwapchainHDR function
+
         // First available format should be a sensible default in most cases
 		VkFormat format = availableFormats[0].format;
 		VkColorSpaceKHR colorSpace = availableFormats[0].colorSpace;
 
         for(u32 i = 0; i < numFormats; ++i) {
-			format = availableFormats[i].format;
-			colorSpace = availableFormats[i].colorSpace;
-
 			VkImageFormatProperties formatProperties;
 			VkResult formatResult = vkGetPhysicalDeviceImageFormatProperties(context->physicalDevice, format, VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, usage, 0, &formatProperties);
 			if(formatResult == VK_ERROR_FORMAT_NOT_SUPPORTED) {
 				GROUNDED_LOG_WARNING("Swapchain format does not support requested usage flags");
-			} else {
+				continue;
+			}
+
+			if(availableFormats[i].colorSpace != VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+				continue;
+			}
+
+			VkFormat wantedFormats[] = {
+				VK_FORMAT_R8G8B8A8_SRGB,
+				VK_FORMAT_B8G8R8A8_SRGB,
+			};
+			bool foundMatch = false;
+			for(u32 j = 0; j < ARRAY_COUNT(wantedFormats); ++j) {
+				if(availableFormats[i].format == wantedFormats[j]) {
+					foundMatch = true;
+					break;
+				}
+			}
+
+			if(foundMatch) {
+				format = availableFormats[i].format;
+				colorSpace = availableFormats[i].colorSpace;
 				break;
 			}
 		}
