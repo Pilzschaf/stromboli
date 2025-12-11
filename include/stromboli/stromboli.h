@@ -177,15 +177,6 @@ typedef struct StromboliInitializationParameters {
     u32 computeQueueRequestCount; // The maximum number of comptue queues. Actual available count might be less
     u32 transferQueueRequestCount; // The maximum number of transfre queues. Actual available count might be less
 
-    // Validation
-    bool enableValidation;
-    bool enableSynchronizationValidation;
-    bool enableBestPracticeWarning;
-    bool enableShaderDebugPrintf; // Printf buffer size can be enlarged by placing vk_layer_settings.txt file in executable working directory with content: khronos_validation.printf_buffer_size = YOUR_BUFFER_SIZE     Default size is 1024
-    bool enableGpuAssistedValidation;
-    bool enableGpuReservedBindingSlot; // Can only be activated in conjunction with enableGpuAssistedValidation
-    bool enableApiDump;
-
     // Features
     bool depthClampFeature;
     bool shaderInt64;

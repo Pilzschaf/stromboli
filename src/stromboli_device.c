@@ -29,13 +29,16 @@ VkBool32 VKAPI_CALL debugReportCallback(VkDebugUtilsMessageSeverityFlagBitsEXT s
 }
 
 VkDebugUtilsMessengerEXT registerDebugCallback(VkInstance instance) {
-	VkDebugUtilsMessengerCreateInfoEXT callbackInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
-	callbackInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
-	callbackInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-	callbackInfo.pfnUserCallback = debugReportCallback;
+    VkDebugUtilsMessengerEXT callback = 0;
 
-	VkDebugUtilsMessengerEXT callback = 0;
-	vkCreateDebugUtilsMessengerEXT(instance, &callbackInfo, 0, &callback);
+    if(vkCreateDebugUtilsMessengerEXT) {
+        VkDebugUtilsMessengerCreateInfoEXT callbackInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
+        callbackInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+        callbackInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+        callbackInfo.pfnUserCallback = debugReportCallback;
+
+        vkCreateDebugUtilsMessengerEXT(instance, &callbackInfo, 0, &callback);
+    }
 
 	return callback;
 }
@@ -59,46 +62,6 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
 
     u32 apiVersion = parameters->vulkanApiVersion ? parameters->vulkanApiVersion : VK_API_VERSION_1_0;
 
-    // Should be large enough to hold all layers we can enable
-    const char* enabledLayers[2];
-    u32 enabledLayerCount = 0;
-    bool validationLayerEnabled = false;
-    if(STROMBOLI_NO_ERROR(error) && parameters->enableValidation) {
-        GROUNDED_LOG_INFO("Validation layer has been requested by the application");
-        u32 availableLayerCount = 0;
-        VkLayerProperties* availableLayers;
-        bool foundValidationLayers = false;
-        vkEnumerateInstanceLayerProperties(&availableLayerCount, 0);
-        if(availableLayerCount > 0) {
-            availableLayers = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, availableLayerCount, VkLayerProperties);
-            if(availableLayers) {
-                vkEnumerateInstanceLayerProperties(&availableLayerCount, availableLayers);
-                for(u32 i = 0; i < availableLayerCount; ++i) {
-                    if(strcmp(availableLayers[i].layerName, "VK_LAYER_KHRONOS_validation") == 0) {
-                        u32 major = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
-                        u32 minor = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
-                        u32 patch = VK_API_VERSION_MAJOR(availableLayers[i].specVersion);
-                        groundedPrintStringf("Enabling Khronos validation layer. Spec version: %u.%u.%u\n", major, minor, patch);
-                        foundValidationLayers = true;
-                        break;
-                    }
-                }
-            }
-        }
-        
-        if(!foundValidationLayers) {
-            GROUNDED_LOG_WARNING("Validation layer could not be found. Are the Vulkan validation layers / The Vulkan SDK installed?");
-        } else {
-            ASSERT(enabledLayerCount < ARRAY_COUNT(enabledLayers));
-            enabledLayers[enabledLayerCount++] = "VK_LAYER_KHRONOS_validation";
-            validationLayerEnabled = true;
-        }
-    }
-    if(parameters->enableApiDump) {
-        ASSERT(enabledLayerCount < ARRAY_COUNT(enabledLayers));
-        enabledLayers[enabledLayerCount++] = "VK_LAYER_LUNARG_api_dump";
-    }
-
     u32 requestedInstanceExtensionCount = parameters->additionalInstanceExtensionCount;
     const char** requestedInstanceExtensions = parameters->additionalInstanceExtensions;
 
@@ -110,26 +73,6 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
         static const char* extension[] = { VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME };
         memcpy(requestedInstanceExtensions + requestedInstanceExtensionCount, extension, sizeof(const char*));
         requestedInstanceExtensionCount += 1;
-    }
-
-    // Check that both validation layer extensions are actually provided by the layer and enable if they are
-    bool validationFeaturesAvailable = false;
-    if(STROMBOLI_NO_ERROR(error) && validationLayerEnabled) {
-        const char** oldRequestedInstanceExtensions = requestedInstanceExtensions;
-        requestedInstanceExtensions = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, requestedInstanceExtensionCount + 2, const char*);
-        memcpy(requestedInstanceExtensions, oldRequestedInstanceExtensions, sizeof(const char*) * requestedInstanceExtensionCount);
-        u32 count = 0;
-        vkEnumerateInstanceExtensionProperties("VK_LAYER_KHRONOS_validation", &count, 0);
-        VkExtensionProperties* availableValidationExtensions = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, count, VkExtensionProperties);
-        vkEnumerateInstanceExtensionProperties("VK_LAYER_KHRONOS_validation", &count, availableValidationExtensions);
-        for(u32 i = 0; i < count; ++i) {
-            if(strcmp(availableValidationExtensions[i].extensionName, VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME) == 0) {
-                requestedInstanceExtensions[requestedInstanceExtensionCount++] = VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME;
-                validationFeaturesAvailable = true;
-            } else if(strcmp(availableValidationExtensions[i].extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0) {
-                requestedInstanceExtensions[requestedInstanceExtensionCount++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-            }
-        }
     }
 
     if(STROMBOLI_NO_ERROR(error)) { // Check if all requested instance extensions are available
@@ -148,62 +91,23 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
                     }
                 }
                 if (!found) {
-                    if(strcmp(requestedInstanceExtensions[i], "VK_EXT_validation_features") == 0) {
-                        // Ignore as this extension is only provided by the layer and not the instance directly
-                    } else {
-                        groundedPrintStringf("Could not find vulkan instance extension %s\n", requestedInstanceExtensions[i]);
-                        error = STROMBOLI_MAKE_ERROR(STROMBOLI_INSTANCE_CREATE_ERROR, "Could not find vulkan instance extension");
-                    }
+                    groundedPrintStringf("Could not find vulkan instance extension %s\n", requestedInstanceExtensions[i]);
+                    error = STROMBOLI_MAKE_ERROR(STROMBOLI_INSTANCE_CREATE_ERROR, "Could not find vulkan instance extension");
+                }
+            }
+            for (u32 j = 0; j < availableInstanceExtensionCount; ++j) {
+                if (strcmp(availableInstanceExtensions[j].extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0) {
+                    const char** oldRequestedInstanceExtensions = requestedInstanceExtensions;
+                    requestedInstanceExtensions = ARENA_PUSH_ARRAY_NO_CLEAR(scratch, requestedInstanceExtensionCount + 1, const char*);
+                    memcpy(requestedInstanceExtensions, oldRequestedInstanceExtensions, sizeof(const char*) * requestedInstanceExtensionCount);
+                    static const char* extension[] = { VK_EXT_DEBUG_UTILS_EXTENSION_NAME };
+                    memcpy(requestedInstanceExtensions + requestedInstanceExtensionCount, extension, sizeof(const char*));
+                    requestedInstanceExtensionCount += 1;
+                    break;
                 }
             }
         }
     }
-
-    VkValidationFeatureEnableEXT enabledValidationFeatures[8];
-    u32 enabledValidationFeatureCount = 0;
-    if(validationLayerEnabled && validationFeaturesAvailable) {
-        if(parameters->enableBestPracticeWarning) {
-            enabledValidationFeatures[enabledValidationFeatureCount++] = VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT;
-        }
-        if(parameters->enableGpuAssistedValidation) {
-            if(apiVersion < VK_API_VERSION_1_1) {
-                GROUNDED_LOG_WARNING("GPU assisted validation requires at least Vulkan 1.1");
-                parameters->enableGpuAssistedValidation = false;
-            } else {
-                enabledValidationFeatures[enabledValidationFeatureCount++] = VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT;
-                // Required for gpu assisted validation
-                parameters->fragmentStoresAndAtomicsFeature = true;
-                parameters->vertexPipelineStoresAndAtomicsFeature = true;
-                parameters->shaderInt64 = true;
-                parameters->timelineSemaphore = true;
-                parameters->vulkanMemoryModel = true;
-                parameters->vulkanMemoryModelDeviceScope = true;
-                parameters->bufferDeviceAddress = true;
-                parameters->storageBuffer8BitAccess = true;
-            }
-        }
-        if(parameters->enableShaderDebugPrintf) {
-            if(parameters->enableGpuAssistedValidation) {
-                GROUNDED_LOG_WARNING("Can not activate shader debug printf at the same time as gpu assisted validation. Ignoring shader debug printf");
-            } else {
-                enabledValidationFeatures[enabledValidationFeatureCount++] = VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT;
-            }    
-        }
-        if(parameters->enableSynchronizationValidation) {
-            enabledValidationFeatures[enabledValidationFeatureCount++] = VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
-        }
-        if(parameters->enableGpuReservedBindingSlot) {
-            if(!parameters->enableGpuAssistedValidation) {
-                GROUNDED_LOG_WARNING("GPU reserved binding slot is enabled without gpu assisted validation. This is not valid and is ignored");
-            } else {
-                enabledValidationFeatures[enabledValidationFeatureCount++] = VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT;
-            }
-        }
-    }
-    ASSERT(enabledValidationFeatureCount <= ARRAY_COUNT(enabledValidationFeatures));
-    VkValidationFeaturesEXT validationFeatures = { VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT };
-	validationFeatures.enabledValidationFeatureCount = enabledValidationFeatureCount;
-	validationFeatures.pEnabledValidationFeatures = enabledValidationFeatures;
 
     if(STROMBOLI_NO_ERROR(error)) { // Init instance
         VkApplicationInfo applicationInfo = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
@@ -214,10 +118,9 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
         applicationInfo.apiVersion = apiVersion;
 
         VkInstanceCreateInfo createInfo = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
-        createInfo.pNext = &validationFeatures;
         createInfo.pApplicationInfo = &applicationInfo;
-        createInfo.enabledLayerCount = enabledLayerCount;
-        createInfo.ppEnabledLayerNames = enabledLayers;
+        createInfo.enabledLayerCount = 0;
+        createInfo.ppEnabledLayerNames = 0;
         createInfo.enabledExtensionCount = requestedInstanceExtensionCount;
         createInfo.ppEnabledExtensionNames = requestedInstanceExtensions;
         result = vkCreateInstance(&createInfo, 0, &context->instance);
@@ -226,9 +129,7 @@ StromboliResult initVulkanInstance(StromboliContext* context, StromboliInitializ
         } else {
             context->apiVersion = applicationInfo.apiVersion;
             volkLoadInstanceOnly(context->instance);
-            if(validationLayerEnabled) {
-                context->debugCallback = registerDebugCallback(context->instance);
-            }
+            context->debugCallback = registerDebugCallback(context->instance);
         }
     }
 
