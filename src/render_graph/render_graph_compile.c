@@ -190,7 +190,7 @@ StromboliImage renderGraphAllocateFramebuffer(RenderGraph* graph, StromboliConte
     }
     if(!memoryBlock) {
         // Need to allocate a new memory block
-        printf("Allocating new memory block for framebuffers\n");
+        GROUNDED_LOG_INFO("Allocating new memory block for framebuffers");
         ASSERT(*nextPointerLocation == 0);
         VkMemoryAllocateInfo allocateInfo = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
         allocateInfo.allocationSize = MAX(memoryRequirements.size, MB(256));
